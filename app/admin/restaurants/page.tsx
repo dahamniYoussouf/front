@@ -1,8 +1,117 @@
-'use client'
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, MapPin, Star, Phone, Mail, MoreVertical, CheckCircle, XCircle, Clock, Eye, Edit, Trash2, X, Save, AlertCircle, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+'use client';
 
+import React, { useState, useEffect } from 'react';
+import {
+  Plus,
+  Search,
+  MapPin,
+  Star,
+  MoreVertical,
+  CheckCircle,
+  XCircle,
+  Eye,
+  Edit,
+  Trash2,
+  X,
+  Save,
+  AlertCircle,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+
+// =========================
+// TYPES
+// =========================
+
+type CategoryValue = 'pizza' | 'burger' | 'tacos' | 'sandwish';
+
+type StatusColor = 'yellow' | 'green' | 'red' | 'gray';
+
+type RestaurantStatus = 'pending' | 'approved' | 'suspended' | 'archived' | string;
+
+type ActiveTab = 'all' | 'requests';
+
+type NotificationType = 'success' | 'error';
+
+interface StatusOption {
+  value: RestaurantStatus;
+  label: string;
+  color: StatusColor;
+}
+
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+interface OpeningHour {
+  open: number;
+  close: number;
+}
+
+type OpeningHours = Record<DayKey, OpeningHour>;
+
+interface Restaurant {
+  id: number;
+  name: string;
+  email?: string;
+  description?: string;
+  address?: string;
+  lat?: string;
+  lng?: string;
+  rating?: number | string;
+  image_url?: string;
+  is_active: boolean;
+  is_premium: boolean;
+  categories?: CategoryValue[];
+  status?: RestaurantStatus;
+  created_at?: string;
+  opening_hours?: Partial<OpeningHours>;
+}
+
+interface RestaurantFilters {
+  categories?: CategoryValue[];
+  address?: string;
+  status?: RestaurantStatus;
+  is_active?: string;
+  is_premium?: string;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+}
+
+interface NotificationState {
+  message: string;
+  type: NotificationType;
+}
+
+interface CreateRestaurantForm {
+  email: string;
+  password: string;
+  name: string;
+  categories: CategoryValue[];
+  description: string;
+  address: string;
+  lat: string;
+  lng: string;
+  rating: number;
+  image_url: string;
+  is_active: boolean;
+  is_premium: boolean;
+  opening_hours: OpeningHours;
+}
+
+interface EditRestaurantForm {
+  name: string;
+  address: string;
+  description: string;
+  is_active: boolean;
+  is_premium: boolean;
+  categories: CategoryValue[];
+}
+
+// =========================
 // API configuration
+// =========================
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 // Get token from localStorage
@@ -15,11 +124,13 @@ const getAuthToken = () => {
 
 // API functions
 const api = {
-  getRestaurants: async (filters = {}) => {
+  getRestaurants: async (
+    filters: RestaurantFilters = {}
+  ): Promise<{ data: Restaurant[]; count: number; totalPages: number; page: number }> => {
     try {
       const token = getAuthToken();
-      
-      const requestBody = {
+
+      const requestBody: RestaurantFilters = {
         categories: filters.categories || undefined,
         address: filters.address || undefined,
         status: filters.status || undefined,
@@ -29,23 +140,23 @@ const api = {
         pageSize: filters.pageSize || 20,
         q: filters.q || undefined
       };
-      
+
       const response = await fetch(`${API_BASE_URL}/restaurant/filter`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch restaurants');
-      
+
       const result = await response.json();
       return {
-        data: result.data || [],
+        data: (result.data || []) as Restaurant[],
         count: result.count || 0,
-        totalPages: result.totalPages || 100,
+        totalPages: result.totalPages || 1,
         page: result.page || 1
       };
     } catch (error) {
@@ -53,31 +164,31 @@ const api = {
       return { data: [], count: 0, totalPages: 1, page: 1 };
     }
   },
-  
-  getPendingRequests: async () => {
+
+  getPendingRequests: async (): Promise<{ data: Restaurant[]; count: number }> => {
     try {
       const token = getAuthToken();
-      
-      const requestBody = {
+
+      const requestBody: RestaurantFilters = {
         page: 1,
         pageSize: 100,
         status: 'pending'
       };
-      
+
       const response = await fetch(`${API_BASE_URL}/restaurant/filter`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch pending requests');
-      
+
       const result = await response.json();
-      const pendingRestaurants = result.data;
-      
+      const pendingRestaurants: Restaurant[] = result.data || [];
+
       return {
         data: pendingRestaurants,
         count: pendingRestaurants.length
@@ -88,13 +199,13 @@ const api = {
     }
   },
 
-  approveRestaurant: async (id) => {
+  approveRestaurant: async (id: number) => {
     try {
       const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/restaurant/update/${id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -102,7 +213,7 @@ const api = {
           is_active: true
         })
       });
-      
+
       if (!response.ok) throw new Error('Failed to approve restaurant');
       return await response.json();
     } catch (error) {
@@ -111,13 +222,13 @@ const api = {
     }
   },
 
-  rejectRestaurant: async (id, reason) => {
+  rejectRestaurant: async (id: number, reason: string) => {
     try {
       const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/restaurant/update/${id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -125,7 +236,7 @@ const api = {
           is_active: false
         })
       });
-      
+
       if (!response.ok) throw new Error('Failed to reject restaurant');
       return await response.json();
     } catch (error) {
@@ -134,18 +245,18 @@ const api = {
     }
   },
 
-  updateRestaurant: async (id, data) => {
+  updateRestaurant: async (id: number, data: Partial<Restaurant>) => {
     try {
       const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/restaurant/update/${id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(data)
       });
-      
+
       if (!response.ok) throw new Error('Failed to update restaurant');
       return await response.json();
     } catch (error) {
@@ -154,17 +265,17 @@ const api = {
     }
   },
 
-  deleteRestaurant: async (id) => {
+  deleteRestaurant: async (id: number) => {
     try {
       const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/restaurant/delete/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (!response.ok) throw new Error('Failed to delete restaurant');
       return await response.json();
     } catch (error) {
@@ -173,7 +284,7 @@ const api = {
     }
   },
 
-  createRestaurant: async (data) => {
+  createRestaurant: async (data: CreateRestaurantForm) => {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
@@ -185,14 +296,14 @@ const api = {
           type: 'restaurant'
         })
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to create restaurant');
       }
-      
+
       return await response.json();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating restaurant:', error);
       throw error;
     }
@@ -200,21 +311,21 @@ const api = {
 };
 
 // Category options
-const CATEGORY_OPTIONS = [
+const CATEGORY_OPTIONS: { value: CategoryValue; label: string }[] = [
   { value: 'pizza', label: 'Pizza' },
   { value: 'burger', label: 'Burger' },
   { value: 'tacos', label: 'Tacos' },
   { value: 'sandwish', label: 'Sandwich' }
 ];
 
-const STATUS_OPTIONS = [
+const STATUS_OPTIONS: StatusOption[] = [
   { value: 'pending', label: 'En attente', color: 'yellow' },
   { value: 'approved', label: 'Approuvé', color: 'green' },
   { value: 'suspended', label: 'Suspendu', color: 'red' },
   { value: 'archived', label: 'Archivé', color: 'gray' }
 ];
 
-const DAYS_OF_WEEK = [
+const DAYS_OF_WEEK: { value: DayKey; label: string }[] = [
   { value: 'mon', label: 'Lundi' },
   { value: 'tue', label: 'Mardi' },
   { value: 'wed', label: 'Mercredi' },
@@ -225,32 +336,39 @@ const DAYS_OF_WEEK = [
 ];
 
 export default function AdminRestaurantManagement() {
-  const [activeTab, setActiveTab] = useState('all');
-  const [restaurants, setRestaurants] = useState([]);
-  const [filteredRestaurants, setFilteredRestaurants] = useState([]);
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterActive, setFilterActive] = useState('all');
-  const [filterPremium, setFilterPremium] = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [filterAddress, setFilterAddress] = useState('');
-  
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [pageSize, setPageSize] = useState(100); // Changé à 5 pour tester
-  
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
-  const [editForm, setEditForm] = useState({});
-  const [notification, setNotification] = useState(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('all');
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [filteredRestaurants, setFilteredRestaurants] = useState<Restaurant[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<Restaurant[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const [createForm, setCreateForm] = useState({
+  const [filterStatus, setFilterStatus] = useState<RestaurantStatus | 'all'>('all');
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
+  const [filterPremium, setFilterPremium] = useState<'all' | 'premium' | 'standard'>('all');
+  const [filterCategory, setFilterCategory] = useState<'all' | CategoryValue>('all');
+  const [filterAddress, setFilterAddress] = useState<string>('');
+
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [pageSize, setPageSize] = useState<number>(100);
+
+  const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [editForm, setEditForm] = useState<EditRestaurantForm>({
+    name: '',
+    address: '',
+    description: '',
+    is_active: true,
+    is_premium: false,
+    categories: []
+  });
+  const [notification, setNotification] = useState<NotificationState | null>(null);
+
+  const [createForm, setCreateForm] = useState<CreateRestaurantForm>({
     email: '',
     password: '',
     name: '',
@@ -274,6 +392,9 @@ export default function AdminRestaurantManagement() {
     }
   });
 
+  const [uploadingImage, setUploadingImage] = useState<boolean>(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -282,6 +403,7 @@ export default function AdminRestaurantManagement() {
   // Load data when page or filters change
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, pageSize, activeTab, filterCategory, filterAddress, filterStatus, filterActive, filterPremium]);
 
   // Apply search filter
@@ -290,33 +412,25 @@ export default function AdminRestaurantManagement() {
   }, [restaurants, searchQuery]);
 
   const loadData = async () => {
-    console.log('🔄 Loading data...', { currentPage, pageSize, totalPages, totalCount });
     setLoading(true);
     try {
       if (activeTab === 'all') {
-        const apiFilters = {
-          q: searchQuery.trim(),
-          address: filterAddress.trim(),
+        const apiFilters: RestaurantFilters = {
+          q: searchQuery.trim() || undefined,
+          address: filterAddress.trim() || undefined,
           page: currentPage,
           pageSize: pageSize
         };
-        
+
         if (filterCategory !== 'all') apiFilters.categories = [filterCategory];
         if (filterStatus !== 'all') apiFilters.status = filterStatus;
         if (filterActive === 'active') apiFilters.is_active = 'true';
         else if (filterActive === 'inactive') apiFilters.is_active = 'false';
         if (filterPremium === 'premium') apiFilters.is_premium = 'true';
         else if (filterPremium === 'standard') apiFilters.is_premium = 'false';
-        
+
         const result = await api.getRestaurants(apiFilters);
-        
-        console.log('✅ Data loaded:', {
-          dataLength: result.data.length,
-          count: result.count,
-          totalPages: result.totalPages,
-          page: result.page
-        });
-        
+
         setRestaurants(result.data);
         setTotalPages(result.totalPages);
         setTotalCount(result.count);
@@ -336,7 +450,7 @@ export default function AdminRestaurantManagement() {
     let filtered = [...restaurants];
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(r => 
+      filtered = filtered.filter((r) =>
         r.name?.toLowerCase().includes(query) ||
         r.address?.toLowerCase().includes(query)
       );
@@ -344,28 +458,85 @@ export default function AdminRestaurantManagement() {
     setFilteredRestaurants(filtered);
   };
 
-  const showNotification = (message, type = 'success') => {
+  const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handlePageChange = (newPage) => {
-    console.log(`📄 Changement de page: ${currentPage} → ${newPage}`);
+  const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages && !loading) {
       setCurrentPage(newPage);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     }
   };
 
-  const handlePageSizeChange = (newSize) => {
-    console.log(`📏 Changement de taille: ${pageSize} → ${newSize}`);
+  const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize);
     setCurrentPage(1);
   };
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showNotification('Veuillez sélectionner une image valide', 'error');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showNotification("L'image ne doit pas dépasser 5 MB", 'error');
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error("Échec de l'upload de l'image");
+      }
+
+      const data = await response.json();
+
+      setCreateForm((prev) => ({ ...prev, image_url: data.url }));
+      setImagePreview(URL.createObjectURL(file));
+      showNotification('Image uploadée avec succès');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      showNotification("Erreur lors de l'upload de l'image", 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = () => {
+    setCreateForm((prev) => ({ ...prev, image_url: '' }));
+    setImagePreview(null);
+  };
+
   const handleCreateRestaurant = async () => {
-    if (!createForm.email || !createForm.password || !createForm.name || 
-        !createForm.address || !createForm.lat || !createForm.lng) {
+    if (
+      !createForm.email ||
+      !createForm.password ||
+      !createForm.name ||
+      !createForm.address ||
+      !createForm.lat ||
+      !createForm.lng
+    ) {
       showNotification('Veuillez remplir tous les champs obligatoires', 'error');
       return;
     }
@@ -379,7 +550,7 @@ export default function AdminRestaurantManagement() {
       await api.createRestaurant(createForm);
       showNotification('Restaurant créé avec succès');
       setShowCreateModal(false);
-      
+
       setCreateForm({
         email: '',
         password: '',
@@ -403,45 +574,46 @@ export default function AdminRestaurantManagement() {
           sun: { open: 1200, close: 2000 }
         }
       });
-      
+
+      setImagePreview(null);
       setCurrentPage(1);
       loadData();
-    } catch (error) {
-      showNotification(error.message || 'Erreur lors de la création', 'error');
+    } catch (error: any) {
+      showNotification(error?.message || 'Erreur lors de la création', 'error');
     }
   };
 
-  const handleApprove = async (id) => {
+  const handleApprove = async (id: number) => {
     if (confirm('Approuver ce restaurant ?')) {
       try {
         await api.approveRestaurant(id);
         showNotification('Restaurant approuvé avec succès');
         loadData();
-      } catch (error) {
-        showNotification('Erreur lors de l\'approbation', 'error');
+      } catch {
+        showNotification("Erreur lors de l'approbation", 'error');
       }
     }
   };
 
-  const handleReject = async (id) => {
+  const handleReject = async (id: number) => {
     const reason = prompt('Raison du rejet :');
     if (reason) {
       try {
         await api.rejectRestaurant(id, reason);
         showNotification('Restaurant rejeté');
         loadData();
-      } catch (error) {
+      } catch {
         showNotification('Erreur lors du rejet', 'error');
       }
     }
   };
 
-  const handleViewDetails = (restaurant) => {
+  const handleViewDetails = (restaurant: Restaurant) => {
     setSelectedRestaurant(restaurant);
     setShowDetailsModal(true);
   };
 
-  const handleEdit = (restaurant) => {
+  const handleEdit = (restaurant: Restaurant) => {
     setSelectedRestaurant(restaurant);
     setEditForm({
       name: restaurant.name || '',
@@ -462,46 +634,46 @@ export default function AdminRestaurantManagement() {
       showNotification('Restaurant mis à jour avec succès');
       setShowEditModal(false);
       loadData();
-    } catch (error) {
+    } catch {
       showNotification('Erreur lors de la mise à jour', 'error');
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer ce restaurant ? Cette action est irréversible.')) {
       try {
         await api.deleteRestaurant(id);
         showNotification('Restaurant supprimé');
-        
+
         if (filteredRestaurants.length === 1 && currentPage > 1) {
-          setCurrentPage(currentPage - 1);
+          setCurrentPage((prev) => prev - 1);
         } else {
           loadData();
         }
-      } catch (error) {
+      } catch {
         showNotification('Erreur lors de la suppression', 'error');
       }
     }
   };
 
-  const handleToggleActive = async (restaurant) => {
+  const handleToggleActive = async (restaurant: Restaurant) => {
     try {
-      await api.updateRestaurant(restaurant.id, { 
-        is_active: !restaurant.is_active 
+      await api.updateRestaurant(restaurant.id, {
+        is_active: !restaurant.is_active
       });
       loadData();
-    } catch (error) {
+    } catch {
       showNotification('Erreur lors de la mise à jour', 'error');
     }
   };
 
-  const handleTogglePremium = async (restaurant) => {
+  const handleTogglePremium = async (restaurant: Restaurant) => {
     try {
-      await api.updateRestaurant(restaurant.id, { 
-        is_premium: !restaurant.is_premium 
+      await api.updateRestaurant(restaurant.id, {
+        is_premium: !restaurant.is_premium
       });
       loadData();
-    } catch (error) {
+    } catch {
       showNotification('Erreur lors de la mise à jour', 'error');
     }
   };
@@ -516,13 +688,14 @@ export default function AdminRestaurantManagement() {
     setCurrentPage(1);
   };
 
-  const StatusBadge = ({ status }) => {
-    const statusConfig = STATUS_OPTIONS.find(s => s.value === status) || {
-      color: 'gray',
-      label: status
-    };
+  const StatusBadge: React.FC<{ status?: RestaurantStatus }> = ({ status }) => {
+    const statusConfig =
+      STATUS_OPTIONS.find((s) => s.value === status) || ({
+        color: 'gray',
+        label: status || 'Inconnu'
+      } as StatusOption);
 
-    const colorClasses = {
+    const colorClasses: Record<StatusColor, string> = {
       yellow: 'bg-yellow-100 text-yellow-800',
       green: 'bg-green-100 text-green-800',
       red: 'bg-red-100 text-red-800',
@@ -530,45 +703,52 @@ export default function AdminRestaurantManagement() {
     };
 
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClasses[statusConfig.color]}`}>
+      <span
+        className={`px-2 py-1 rounded-full text-xs font-medium ${
+          colorClasses[statusConfig.color]
+        }`}
+      >
         {statusConfig.label}
       </span>
     );
   };
 
-  const Pagination = () => {
-    console.log('🎯 Rendering Pagination:', { currentPage, totalPages, totalCount, pageSize });
-
+  const Pagination: React.FC = () => {
     const getPageNumbers = () => {
-      const pages = [];
+      const pages: number[] = [];
       const maxVisiblePages = 5;
-      
+
       let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
       let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-      
+
       if (endPage - startPage < maxVisiblePages - 1) {
         startPage = Math.max(1, endPage - maxVisiblePages + 1);
       }
-      
+
       for (let i = startPage; i <= endPage; i++) {
         pages.push(i);
       }
-      
+
       return pages;
     };
 
-    // Toujours afficher pour debug
-    // if (totalPages <= 1) return null;
+    const pageNumbers = getPageNumbers();
 
     return (
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 bg-white border border-gray-200 rounded-lg mt-6">
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <div className="text-sm text-gray-700">
-            Affichage de <span className="font-medium">{totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> à{' '}
-            <span className="font-medium">{Math.min(currentPage * pageSize, totalCount)}</span> sur{' '}
-            <span className="font-medium">{totalCount}</span> résultats
+            Affichage de{' '}
+            <span className="font-medium">
+              {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+            </span>{' '}
+            à{' '}
+            <span className="font-medium">
+              {Math.min(currentPage * pageSize, totalCount)}
+            </span>{' '}
+            sur <span className="font-medium">{totalCount}</span> résultats
           </div>
-          
+
           <select
             value={pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
@@ -592,7 +772,7 @@ export default function AdminRestaurantManagement() {
             <span className="hidden sm:inline">Précédent</span>
           </button>
 
-          {getPageNumbers()[0] > 1 && (
+          {pageNumbers[0] > 1 && (
             <>
               <button
                 onClick={() => handlePageChange(1)}
@@ -601,11 +781,13 @@ export default function AdminRestaurantManagement() {
               >
                 1
               </button>
-              {getPageNumbers()[0] > 2 && <span className="px-2 text-gray-500">...</span>}
+              {pageNumbers[0] > 2 && (
+                <span className="px-2 text-gray-500">...</span>
+              )}
             </>
           )}
 
-          {getPageNumbers().map((page) => (
+          {pageNumbers.map((page) => (
             <button
               key={page}
               onClick={() => handlePageChange(page)}
@@ -620,9 +802,9 @@ export default function AdminRestaurantManagement() {
             </button>
           ))}
 
-          {getPageNumbers()[getPageNumbers().length - 1] < totalPages && (
+          {pageNumbers[pageNumbers.length - 1] < totalPages && (
             <>
-              {getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1 && (
+              {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
                 <span className="px-2 text-gray-500">...</span>
               )}
               <button
@@ -648,7 +830,7 @@ export default function AdminRestaurantManagement() {
     );
   };
 
-  const RestaurantCard = ({ restaurant }) => (
+  const RestaurantCard: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => (
     <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-4">
       <div className="flex gap-4">
         <img
@@ -660,12 +842,16 @@ export default function AdminRestaurantManagement() {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 truncate">{restaurant.name}</h3>
+              <h3 className="font-semibold text-gray-900 truncate">
+                {restaurant.name}
+              </h3>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <div className="flex items-center">
                   <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                   <span className="text-sm text-gray-600 ml-1">
-                    {restaurant.rating ? parseFloat(restaurant.rating).toFixed(1) : '0.0'}
+                    {restaurant.rating
+                      ? parseFloat(String(restaurant.rating)).toFixed(1)
+                      : '0.0'}
                   </span>
                 </div>
                 {restaurant.is_premium && (
@@ -709,7 +895,10 @@ export default function AdminRestaurantManagement() {
 
           <div className="flex flex-wrap gap-1 mb-2">
             {restaurant.categories?.map((cat, idx) => (
-              <span key={idx} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded">
+              <span
+                key={`${cat}-${idx}`}
+                className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded"
+              >
                 {cat}
               </span>
             ))}
@@ -718,7 +907,9 @@ export default function AdminRestaurantManagement() {
           <div className="space-y-1 text-sm text-gray-600 mb-2">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate">{restaurant.address || 'Adresse non renseignée'}</span>
+              <span className="truncate">
+                {restaurant.address || 'Adresse non renseignée'}
+              </span>
             </div>
           </div>
 
@@ -749,7 +940,7 @@ export default function AdminRestaurantManagement() {
     </div>
   );
 
-  const PendingRequestCard = ({ request }) => (
+  const PendingRequestCard: React.FC<{ request: Restaurant }> = ({ request }) => (
     <div className="bg-white rounded-lg shadow p-4">
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
@@ -759,7 +950,9 @@ export default function AdminRestaurantManagement() {
           </p>
         </div>
         <span className="text-xs text-gray-500">
-          {request.created_at ? new Date(request.created_at).toLocaleDateString('fr-FR') : ''}
+          {request.created_at
+            ? new Date(request.created_at).toLocaleDateString('fr-FR')
+            : ''}
         </span>
       </div>
 
@@ -777,7 +970,9 @@ export default function AdminRestaurantManagement() {
           <span>{request.address}</span>
         </div>
         {request.description && (
-          <p className="text-sm text-gray-600 line-clamp-2">{request.description}</p>
+          <p className="text-sm text-gray-600 line-clamp-2">
+            {request.description}
+          </p>
         )}
       </div>
 
@@ -811,10 +1006,16 @@ export default function AdminRestaurantManagement() {
     <div className="min-h-screen bg-gray-50">
       {/* Notification */}
       {notification && (
-        <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 ${
-          notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
-        } text-white`}>
-          {notification.type === 'error' ? <AlertCircle className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
+        <div
+          className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 ${
+            notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+          } text-white`}
+        >
+          {notification.type === 'error' ? (
+            <AlertCircle className="w-5 h-5" />
+          ) : (
+            <CheckCircle className="w-5 h-5" />
+          )}
           {notification.message}
         </div>
       )}
@@ -823,7 +1024,9 @@ export default function AdminRestaurantManagement() {
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-gray-900">Gestion des Restaurants</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Gestion des Restaurants
+            </h1>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCreateModal(true)}
@@ -904,31 +1107,51 @@ export default function AdminRestaurantManagement() {
               {/* Category Filter */}
               <select
                 value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
+                onChange={(e) =>
+                  setFilterCategory(
+                    e.target.value === 'all'
+                      ? 'all'
+                      : (e.target.value as CategoryValue)
+                  )
+                }
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">Toutes les catégories</option>
-                {CATEGORY_OPTIONS.map(cat => (
-                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                {CATEGORY_OPTIONS.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
                 ))}
               </select>
 
               {/* Status Filter */}
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e) =>
+                  setFilterStatus(
+                    e.target.value === 'all'
+                      ? 'all'
+                      : (e.target.value as RestaurantStatus)
+                  )
+                }
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">Tous les statuts</option>
-                {STATUS_OPTIONS.map(status => (
-                  <option key={status.value} value={status.value}>{status.label}</option>
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
                 ))}
               </select>
 
               {/* Active State Filter */}
               <select
                 value={filterActive}
-                onChange={(e) => setFilterActive(e.target.value)}
+                onChange={(e) =>
+                  setFilterActive(
+                    e.target.value as 'all' | 'active' | 'inactive'
+                  )
+                }
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">Tous les états</option>
@@ -939,7 +1162,11 @@ export default function AdminRestaurantManagement() {
               {/* Premium Filter */}
               <select
                 value={filterPremium}
-                onChange={(e) => setFilterPremium(e.target.value)}
+                onChange={(e) =>
+                  setFilterPremium(
+                    e.target.value as 'all' | 'premium' | 'standard'
+                  )
+                }
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">Tous les types</option>
@@ -989,7 +1216,8 @@ export default function AdminRestaurantManagement() {
               Demandes en attente
             </h2>
             <p className="text-gray-600 mb-6">
-              Consultez et gérez les demandes d'inscription des nouveaux restaurants.
+              Consultez et gérez les demandes d'inscription des nouveaux
+              restaurants.
             </p>
             {pendingRequests.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1029,20 +1257,27 @@ export default function AdminRestaurantManagement() {
                   className="w-full h-48 object-cover rounded-lg mb-4"
                 />
               )}
-              
+
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Statut</label>
+                  <label className="text-sm font-medium text-gray-700">
+                    Statut
+                  </label>
                   <div className="mt-1">
                     <StatusBadge status={selectedRestaurant.status} />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Catégories</label>
+                  <label className="text-sm font-medium text-gray-700">
+                    Catégories
+                  </label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {selectedRestaurant.categories?.map((cat, idx) => (
-                      <span key={idx} className="px-2 py-1 bg-blue-50 text-blue-700 text-sm rounded">
+                      <span
+                        key={`${cat}-${idx}`}
+                        className="px-2 py-1 bg-blue-50 text-blue-700 text-sm rounded"
+                      >
                         {cat}
                       </span>
                     ))}
@@ -1051,28 +1286,44 @@ export default function AdminRestaurantManagement() {
 
                 {selectedRestaurant.description && (
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Description</label>
-                    <p className="text-gray-900 mt-1">{selectedRestaurant.description}</p>
+                    <label className="text-sm font-medium text-gray-700">
+                      Description
+                    </label>
+                    <p className="text-gray-900 mt-1">
+                      {selectedRestaurant.description}
+                    </p>
                   </div>
                 )}
-                
+
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Adresse</label>
-                  <p className="text-gray-900 mt-1">{selectedRestaurant.address || 'Non renseignée'}</p>
+                  <label className="text-sm font-medium text-gray-700">
+                    Adresse
+                  </label>
+                  <p className="text-gray-900 mt-1">
+                    {selectedRestaurant.address || 'Non renseignée'}
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Note</label>
+                    <label className="text-sm font-medium text-gray-700">
+                      Note
+                    </label>
                     <div className="flex items-center mt-1">
                       <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
                       <span className="ml-1 text-gray-900">
-                        {selectedRestaurant.rating ? parseFloat(selectedRestaurant.rating).toFixed(1) : '0.0'}
+                        {selectedRestaurant.rating
+                          ? parseFloat(
+                              String(selectedRestaurant.rating)
+                            ).toFixed(1)
+                          : '0.0'}
                       </span>
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Type</label>
+                    <label className="text-sm font-medium text-gray-700">
+                      Type
+                    </label>
                     <p className="text-gray-900 mt-1">
                       {selectedRestaurant.is_premium ? 'Premium' : 'Standard'}
                     </p>
@@ -1080,7 +1331,9 @@ export default function AdminRestaurantManagement() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">État</label>
+                  <label className="text-sm font-medium text-gray-700">
+                    État
+                  </label>
                   <p className="text-gray-900 mt-1">
                     {selectedRestaurant.is_active ? 'Actif' : 'Inactif'}
                   </p>
@@ -1150,7 +1403,7 @@ export default function AdminRestaurantManagement() {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1159,7 +1412,9 @@ export default function AdminRestaurantManagement() {
                   <input
                     type="text"
                     value={editForm.name}
-                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, name: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="Nom du restaurant"
                   />
@@ -1171,7 +1426,9 @@ export default function AdminRestaurantManagement() {
                   </label>
                   <textarea
                     value={editForm.description}
-                    onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, description: e.target.value })
+                    }
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="Description du restaurant"
@@ -1185,7 +1442,9 @@ export default function AdminRestaurantManagement() {
                   <input
                     type="text"
                     value={editForm.address}
-                    onChange={(e) => setEditForm({...editForm, address: e.target.value})}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, address: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="Adresse complète"
                   />
@@ -1196,20 +1455,30 @@ export default function AdminRestaurantManagement() {
                     Catégories *
                   </label>
                   <div className="space-y-2">
-                    {CATEGORY_OPTIONS.map(cat => (
-                      <label key={cat.value} className="flex items-center gap-2 cursor-pointer">
+                    {CATEGORY_OPTIONS.map((cat) => (
+                      <label
+                        key={cat.value}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
                         <input
                           type="checkbox"
-                          checked={editForm.categories?.includes(cat.value)}
+                          checked={editForm.categories.includes(cat.value)}
                           onChange={(e) => {
                             const newCategories = e.target.checked
-                              ? [...(editForm.categories || []), cat.value]
-                              : (editForm.categories || []).filter(c => c !== cat.value);
-                            setEditForm({...editForm, categories: newCategories});
+                              ? [...editForm.categories, cat.value]
+                              : editForm.categories.filter(
+                                  (c) => c !== cat.value
+                                );
+                            setEditForm({
+                              ...editForm,
+                              categories: newCategories
+                            });
                           }}
                           className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                         />
-                        <span className="text-sm text-gray-700">{cat.label}</span>
+                        <span className="text-sm text-gray-700">
+                          {cat.label}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -1220,20 +1489,34 @@ export default function AdminRestaurantManagement() {
                     <input
                       type="checkbox"
                       checked={editForm.is_active}
-                      onChange={(e) => setEditForm({...editForm, is_active: e.target.checked})}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          is_active: e.target.checked
+                        })
+                      }
                       className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                     />
-                    <span className="text-sm font-medium text-gray-700">Restaurant actif</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      Restaurant actif
+                    </span>
                   </label>
 
                   <label className="flex items-center gap-2 cursor-pointer p-3 border border-gray-300 rounded-lg hover:bg-gray-50">
                     <input
                       type="checkbox"
                       checked={editForm.is_premium}
-                      onChange={(e) => setEditForm({...editForm, is_premium: e.target.checked})}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          is_premium: e.target.checked
+                        })
+                      }
                       className="w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
                     />
-                    <span className="text-sm font-medium text-gray-700">Compte Premium</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      Compte Premium
+                    </span>
                   </label>
                 </div>
               </div>
@@ -1272,11 +1555,13 @@ export default function AdminRestaurantManagement() {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
+
               <div className="space-y-6">
                 {/* Account Information */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold mb-4">Informations du compte</h3>
+                  <h3 className="text-lg font-semibold mb-4">
+                    Informations du compte
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1285,7 +1570,12 @@ export default function AdminRestaurantManagement() {
                       <input
                         type="email"
                         value={createForm.email}
-                        onChange={(e) => setCreateForm({...createForm, email: e.target.value})}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            email: e.target.value
+                          })
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="restaurant@example.com"
                         required
@@ -1299,7 +1589,12 @@ export default function AdminRestaurantManagement() {
                       <input
                         type="password"
                         value={createForm.password}
-                        onChange={(e) => setCreateForm({...createForm, password: e.target.value})}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            password: e.target.value
+                          })
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="••••••••"
                         required
@@ -1310,16 +1605,21 @@ export default function AdminRestaurantManagement() {
 
                 {/* Restaurant Information */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold mb-4">Informations du restaurant</h3>
+                  <h3 className="text-lg font-semibold mb-4">
+                    Informations du restaurant
+                  </h3>
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Nom du restaurant * <span className="text-red-500">●</span>
+                        Nom du restaurant *{' '}
+                        <span className="text-red-500">●</span>
                       </label>
                       <input
                         type="text"
                         value={createForm.name}
-                        onChange={(e) => setCreateForm({...createForm, name: e.target.value})}
+                        onChange={(e) =>
+                          setCreateForm({ ...createForm, name: e.target.value })
+                        }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Nom du restaurant"
                         required
@@ -1332,45 +1632,67 @@ export default function AdminRestaurantManagement() {
                       </label>
                       <textarea
                         value={createForm.description}
-                        onChange={(e) => setCreateForm({...createForm, description: e.target.value})}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            description: e.target.value
+                          })
+                        }
                         rows={3}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Description du restaurant..."
                       />
                     </div>
 
-                   <div>
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-3">
-                        Catégories * <span className="text-red-500">●</span>
+                        Catégories *{' '}
+                        <span className="text-red-500">●</span>
                       </label>
                       <div className="grid grid-cols-2 gap-3">
-                        {CATEGORY_OPTIONS.map(cat => {
-                          const isSelected = createForm.categories.includes(cat.value);
-                          const icons = {
+                        {CATEGORY_OPTIONS.map((cat) => {
+                          const isSelected =
+                            createForm.categories.includes(cat.value);
+                          const icons: Record<CategoryValue, string> = {
                             pizza: '🍕',
                             burger: '🍔',
                             tacos: '🌮',
                             sandwish: '🥪'
                           };
-                          const colors = {
-                            pizza: 'from-red-50 to-orange-50 border-red-200 hover:border-red-400',
-                            burger: 'from-yellow-50 to-amber-50 border-yellow-200 hover:border-yellow-400',
-                            tacos: 'from-orange-50 to-yellow-50 border-orange-200 hover:border-orange-400',
-                            sandwish: 'from-green-50 to-emerald-50 border-green-200 hover:border-green-400'
+                          const colors: Record<CategoryValue, string> = {
+                            pizza:
+                              'from-red-50 to-orange-50 border-red-200 hover:border-red-400',
+                            burger:
+                              'from-yellow-50 to-amber-50 border-yellow-200 hover:border-yellow-400',
+                            tacos:
+                              'from-orange-50 to-yellow-50 border-orange-200 hover:border-orange-400',
+                            sandwish:
+                              'from-green-50 to-emerald-50 border-green-200 hover:border-green-400'
                           };
-                          const selectedColors = {
-                            pizza: 'from-red-100 to-orange-100 border-red-500 ring-2 ring-red-500 ring-offset-2',
-                            burger: 'from-yellow-100 to-amber-100 border-yellow-500 ring-2 ring-yellow-500 ring-offset-2',
-                            tacos: 'from-orange-100 to-yellow-100 border-orange-500 ring-2 ring-orange-500 ring-offset-2',
-                            sandwish: 'from-green-100 to-emerald-100 border-green-500 ring-2 ring-green-500 ring-offset-2'
-                          };
-                          
+                          const selectedColors: Record<CategoryValue, string> =
+                            {
+                              pizza:
+                                'from-red-100 to-orange-100 border-red-500 ring-2 ring-red-500 ring-offset-2',
+                              burger:
+                                'from-yellow-100 to-amber-100 border-yellow-500 ring-2 ring-yellow-500 ring-offset-2',
+                              tacos:
+                                'from-orange-100 to-yellow-100 border-orange-500 ring-2 ring-orange-500 ring-offset-2',
+                              sandwish:
+                                'from-green-100 to-emerald-100 border-green-500 ring-2 ring-green-500 ring-offset-2'
+                            };
+
                           return (
-                            <label 
-                              key={cat.value} 
+                            <label
+                              key={cat.value}
                               className={`relative flex flex-col items-center justify-center cursor-pointer p-4 border-2 rounded-xl transition-all duration-200 bg-gradient-to-br ${
-                                isSelected ? selectedColors[cat.value] : colors[cat.value]
-                              } ${isSelected ? 'transform scale-105' : 'hover:scale-102'}`}
+                                isSelected
+                                  ? selectedColors[cat.value]
+                                  : colors[cat.value]
+                              } ${
+                                isSelected
+                                  ? 'transform scale-105'
+                                  : 'hover:scale-102'
+                              }`}
                             >
                               <input
                                 type="checkbox"
@@ -1378,13 +1700,26 @@ export default function AdminRestaurantManagement() {
                                 onChange={(e) => {
                                   const newCategories = e.target.checked
                                     ? [...createForm.categories, cat.value]
-                                    : createForm.categories.filter(c => c !== cat.value);
-                                  setCreateForm({...createForm, categories: newCategories});
+                                    : createForm.categories.filter(
+                                        (c) => c !== cat.value
+                                      );
+                                  setCreateForm({
+                                    ...createForm,
+                                    categories: newCategories
+                                  });
                                 }}
                                 className="absolute top-2 right-2 w-5 h-5 text-green-600 rounded-full focus:ring-2 focus:ring-green-500"
                               />
-                              <span className="text-4xl mb-2">{icons[cat.value]}</span>
-                              <span className={`text-sm font-semibold ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                              <span className="text-4xl mb-2">
+                                {icons[cat.value]}
+                              </span>
+                              <span
+                                className={`text-sm font-semibold ${
+                                  isSelected
+                                    ? 'text-gray-900'
+                                    : 'text-gray-700'
+                                }`}
+                              >
                                 {cat.label}
                               </span>
                             </label>
@@ -1392,21 +1727,99 @@ export default function AdminRestaurantManagement() {
                         })}
                       </div>
                       {createForm.categories.length === 0 && (
-                        <p className="text-xs text-red-600 mt-2">Veuillez sélectionner au moins une catégorie</p>
+                        <p className="text-xs text-red-600 mt-2">
+                          Veuillez sélectionner au moins une catégorie
+                        </p>
                       )}
                     </div>
 
+                    {/* Image Upload Section */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        URL de l'image
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Image du restaurant
                       </label>
-                      <input
-                        type="url"
-                        value={createForm.image_url}
-                        onChange={(e) => setCreateForm({...createForm, image_url: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="https://example.com/image.jpg"
-                      />
+
+                      <div className="space-y-4">
+                        {(imagePreview || createForm.image_url) && (
+                          <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200">
+                            <img
+                              src={imagePreview || createForm.image_url}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={removeImage}
+                              className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex gap-3">
+                          <label className="flex-1 cursor-pointer">
+                            <div className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors">
+                              {uploadingImage ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-green-600"></div>
+                                  <span className="text-sm text-gray-600">
+                                    Upload en cours...
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg
+                                    className="w-5 h-5 text-gray-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                    />
+                                  </svg>
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Télécharger une image
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageUpload}
+                              className="hidden"
+                              disabled={uploadingImage}
+                            />
+                          </label>
+
+                          {/* Manual URL Input */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const url = prompt('Entrez l\'URL de l\'image:');
+                              if (url) {
+                                setCreateForm({...createForm, image_url: url});
+                                setImagePreview(null);
+                              }
+                            }}
+                            className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            title="Entrer une URL manuellement"
+                          >
+                            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <p className="text-xs text-gray-500">
+                          Formats acceptés: JPG, PNG, GIF. Taille max: 5 MB
+                        </p>
+                      </div>
                     </div>
 
                     <div>
@@ -1566,6 +1979,7 @@ export default function AdminRestaurantManagement() {
                 <button
                   onClick={handleCreateRestaurant}
                   className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                  disabled={uploadingImage}
                 >
                   <Plus className="w-4 h-4" />
                   Créer le restaurant

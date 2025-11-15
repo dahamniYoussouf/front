@@ -2,16 +2,25 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+interface ProtectedRouteProps {
+  children: ReactNode;
+}
+
+export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+  // On "étend" le type retourné par useAuth pour ajouter loading
+  const { user, loading = false } = useAuth() as {
+    user: any;
+    loading?: boolean;
+  };
+
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    } else if (!loading && user && user.role !== 'admin') {
+    if (loading) return;
+
+    if (!user || user.role !== 'admin') {
       router.push('/login');
     }
   }, [user, loading, router]);

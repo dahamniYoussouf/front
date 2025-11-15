@@ -52,10 +52,11 @@ export default function ClientManagement() {
       } else {
         throw new Error('Format de données invalide');
       }
-    } catch (err) {
-      console.error('Erreur fetch clients:', err);
-      setError(err.message || 'Impossible de charger les clients');
-    } finally {
+    } catch (err: any) {
+  console.error('Erreur fetch clients:', err);
+  setError(err?.message || 'Impossible de charger les clients');
+}
+ finally {
       setLoading(false);
     }
   };

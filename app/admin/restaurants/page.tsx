@@ -55,6 +55,8 @@ interface Restaurant {
   email?: string;
   description?: string;
   address?: string;
+    phone_number?: string;
+
   lat?: string;
   lng?: string;
   rating?: number | string;
@@ -90,6 +92,7 @@ interface CreateRestaurantForm {
   categories: CategoryValue[];
   description: string;
   address: string;
+  phone_number : string;
   lat: string;
   lng: string;
   rating: number;
@@ -102,6 +105,8 @@ interface CreateRestaurantForm {
 interface EditRestaurantForm {
   name: string;
   address: string;
+    phone_number: string;
+
   description: string;
   is_active: boolean;
   is_premium: boolean;
@@ -364,6 +369,7 @@ export default function AdminRestaurantManagement() {
     description: '',
     is_active: true,
     is_premium: false,
+    phone_number:'',
     categories: []
   });
   const [notification, setNotification] = useState<NotificationState | null>(null);
@@ -381,6 +387,7 @@ export default function AdminRestaurantManagement() {
     image_url: '',
     is_active: true,
     is_premium: false,
+    phone_number: '',
     opening_hours: {
       mon: { open: 900, close: 1800 },
       tue: { open: 900, close: 1800 },
@@ -432,7 +439,11 @@ export default function AdminRestaurantManagement() {
         const result = await api.getRestaurants(apiFilters);
 
         setRestaurants(result.data);
-        setTotalPages(result.totalPages);
+        const calculatedTotalPages = result.count > 0 
+  ? Math.ceil(result.count / pageSize) 
+  : 1;
+
+setTotalPages(calculatedTotalPages);
         setTotalCount(result.count);
       } else {
         const result = await api.getPendingRequests();
@@ -557,6 +568,7 @@ export default function AdminRestaurantManagement() {
         name: '',
         categories: [],
         description: '',
+        phone_number: '',
         address: '',
         lat: '',
         lng: '',
@@ -618,6 +630,7 @@ export default function AdminRestaurantManagement() {
     setEditForm({
       name: restaurant.name || '',
       address: restaurant.address || '',
+          phone_number: restaurant.phone_number || '',  // ✅ AJOUTER
       description: restaurant.description || '',
       is_active: restaurant.is_active ?? true,
       is_premium: restaurant.is_premium ?? false,
@@ -1304,6 +1317,14 @@ export default function AdminRestaurantManagement() {
                   </p>
                 </div>
 
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Numéro de téléphone
+                </label>
+                <p className="text-gray-900 mt-1">
+                  {selectedRestaurant.phone_number || 'Non renseigné'}
+                </p>
+              </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-700">
@@ -1447,6 +1468,21 @@ export default function AdminRestaurantManagement() {
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="Adresse complète"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Numéro de téléphone
+                  </label>
+                  <input
+                    type="tel"
+                    value={editForm.phone_number || ''}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, phone_number: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="+213 555 123 456"
                   />
                 </div>
 
@@ -1600,8 +1636,28 @@ export default function AdminRestaurantManagement() {
                         required
                       />
                     </div>
+                    
+                    <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Numéro de téléphone *{' '}
+                      <span className="text-red-500">●</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={createForm.phone_number || ''}
+                      onChange={(e) =>
+                        setCreateForm({
+                          ...createForm,
+                          phone_number: e.target.value
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="+213 555 123 456"
+                      required
+                    />
                   </div>
                 </div>
+              </div>
 
                 {/* Restaurant Information */}
                 <div className="bg-gray-50 p-4 rounded-lg">

@@ -57,7 +57,6 @@ interface Driver {
 }
 
 type ModalType = '' | 'view' | 'edit' | 'delete' | 'create';
-type ActiveTab = 'all' | 'requests';
 
 interface CreateDriverForm {
   email: string;
@@ -87,9 +86,7 @@ interface EditDriverForm {
 }
 
 export default function DriverManagement() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('all');
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [pendingDrivers, setPendingDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -147,12 +144,7 @@ export default function DriverManagement() {
       const data = await response.json();
 
       if (data.success && data.data) {
-        const allDrivers = data.data as Driver[];
-        setDrivers(allDrivers);
-        
-        // Séparer les livreurs non vérifiés
-        const unverified = allDrivers.filter(d => !d.is_verified);
-        setPendingDrivers(unverified);
+        setDrivers(data.data as Driver[]);
       } else {
         throw new Error('Format de données invalide');
       }
@@ -343,75 +335,7 @@ export default function DriverManagement() {
     }
   };
 
-  const handleApproveDriver = async (driver: Driver) => {
-    if (confirm(`Approuver le livreur ${driver.first_name} ${driver.last_name} ?`)) {
-      try {
-        setSaveLoading(true);
-        const token = localStorage.getItem('access_token');
-        
-        const response = await fetch(`${API_URL}/driver/update/${driver.id}`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            is_verified: true,
-            is_active: true,
-            status: 'available'
-          })
-        });
-
-        if (!response.ok) throw new Error('Erreur lors de l\'approbation');
-
-        setError('');
-        alert('Livreur approuvé avec succès');
-        await fetchDrivers();
-      } catch (err: any) {
-        console.error('Erreur approbation:', err);
-        setError(err?.message || 'Impossible d\'approuver le livreur');
-      } finally {
-        setSaveLoading(false);
-      }
-    }
-  };
-
-  const handleRejectDriver = async (driver: Driver) => {
-    const reason = prompt(`Raison du rejet de ${driver.first_name} ${driver.last_name} :`);
-    if (reason) {
-      try {
-        setSaveLoading(true);
-        const token = localStorage.getItem('access_token');
-        
-        const response = await fetch(`${API_URL}/driver/update/${driver.id}`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            is_verified: false,
-            is_active: false,
-            status: 'suspended',
-            notes: `Rejeté: ${reason}`
-          })
-        });
-
-        if (!response.ok) throw new Error('Erreur lors du rejet');
-
-        setError('');
-        alert('Livreur rejeté');
-        await fetchDrivers();
-      } catch (err: any) {
-        console.error('Erreur rejet:', err);
-        setError(err?.message || 'Impossible de rejeter le livreur');
-      } finally {
-        setSaveLoading(false);
-      }
-    }
-  };
-
-  const handleDeleteModal = async () => {
+  const handleDelete = async () => {
     if (!selectedDriver) {
       setError('Aucun livreur sélectionné');
       return;
@@ -506,10 +430,9 @@ export default function DriverManagement() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Gestion des Livreurs</h1>
               <p className="mt-1 text-sm text-gray-500">
-                {activeTab === 'all' 
-                  ? `${filteredDrivers.length} livreur${filteredDrivers.length > 1 ? 's' : ''} trouvé${filteredDrivers.length > 1 ? 's' : ''}`
-                  : `${pendingDrivers.length} demande${pendingDrivers.length > 1 ? 's' : ''} en attente`
-                }
+                {filteredDrivers.length} livreur
+                {filteredDrivers.length > 1 ? 's' : ''} trouvé
+                {filteredDrivers.length > 1 ? 's' : ''}
               </p>
             </div>
             <div className="flex gap-3">
@@ -533,35 +456,6 @@ export default function DriverManagement() {
             </div>
           </div>
 
-          {/* Onglets */}
-          <div className="flex gap-4 border-b mt-6">
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`pb-3 px-1 border-b-2 font-medium transition-colors ${
-                activeTab === 'all'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Tous les livreurs ({drivers.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('requests')}
-              className={`pb-3 px-1 border-b-2 font-medium transition-colors relative ${
-                activeTab === 'requests'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Demandes en attente
-              {pendingDrivers.length > 0 && (
-                <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
-                  {pendingDrivers.length}
-                </span>
-              )}
-            </button>
-          </div>
-
           {/* Message d'erreur global */}
           {error && !showModal && (
             <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
@@ -573,36 +467,34 @@ export default function DriverManagement() {
             </div>
           )}
 
-          {/* Barre de recherche et filtres - seulement pour l'onglet "all" */}
-          {activeTab === 'all' && (
-            <div className="mt-6 flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Rechercher par nom, code, email ou téléphone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                />
-              </div>
-              <select
-                value={filterStatus}
-                onChange={(e) =>
-                  setFilterStatus(e.target.value as typeof filterStatus)
-                }
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
-              >
-                <option value="all">Tous les statuts</option>
-                <option value="available">Disponibles</option>
-                <option value="busy">Occupés</option>
-                <option value="offline">Hors ligne</option>
-                <option value="suspended">Suspendus</option>
-                <option value="verified">Vérifiés</option>
-                <option value="unverified">Non vérifiés</option>
-              </select>
+          {/* Barre de recherche et filtres */}
+          <div className="mt-6 flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher par nom, code, email ou téléphone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
             </div>
-          )}
+            <select
+              value={filterStatus}
+              onChange={(e) =>
+                setFilterStatus(e.target.value as typeof filterStatus)
+              }
+              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="available">Disponibles</option>
+              <option value="busy">Occupés</option>
+              <option value="offline">Hors ligne</option>
+              <option value="suspended">Suspendus</option>
+              <option value="verified">Vérifiés</option>
+              <option value="unverified">Non vérifiés</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -612,7 +504,7 @@ export default function DriverManagement() {
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
-        ) : activeTab === 'all' ? (
+        ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -785,89 +677,6 @@ export default function DriverManagement() {
                 <p className="mt-1 text-sm text-gray-500">
                   Essayez de modifier vos critères de recherche
                 </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Onglet Demandes en attente */
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              Demandes de livreurs en attente
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Consultez et gérez les demandes d'inscription des nouveaux livreurs.
-            </p>
-            {pendingDrivers.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pendingDrivers.map((driver) => (
-                  <div key={driver.id} className="bg-white rounded-lg shadow p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">
-                          {driver.first_name} {driver.last_name}
-                        </h3>
-                        <p className="text-sm text-gray-500 font-mono mt-1">
-                          {driver.driver_code}
-                        </p>
-                        <p className="text-sm text-gray-600 mt-1 capitalize">
-                          {driver.vehicle_type} - {driver.vehicle_plate || 'N/A'}
-                        </p>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {formatDate(driver.created_at)}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2 text-sm text-gray-600 mb-4">
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        <span>{driver.phone}</span>
-                      </div>
-                      {driver.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4" />
-                          <span className="text-xs">{driver.email}</span>
-                        </div>
-                      )}
-                      {driver.license_number && (
-                        <div className="text-xs text-gray-500">
-                          Permis: {driver.license_number}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleAction(driver, 'view')}
-                        className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Détails
-                      </button>
-                      <button
-                        onClick={() => handleApproveDriver(driver)}
-                        disabled={saveLoading}
-                        className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        <UserCheck className="w-4 h-4" />
-                        Accepter
-                      </button>
-                      <button
-                        onClick={() => handleRejectDriver(driver)}
-                        disabled={saveLoading}
-                        className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        <UserX className="w-4 h-4" />
-                        Rejeter
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 bg-white rounded-lg">
-                <UserCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                <p className="text-gray-500">Aucune demande en attente</p>
               </div>
             )}
           </div>
@@ -1144,7 +953,7 @@ export default function DriverManagement() {
                       Annuler
                     </button>
                     <button
-                      onClick={handleDeleteModal}
+                      onClick={handleDelete}
                       disabled={saveLoading}
                       className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                     >

@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X } from 'lucide-react';
+import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 
@@ -47,18 +47,49 @@ export default function AdminLayout({
       path: '/admin/clients'
     },
     {
+      title: 'Favoris Clients',
+      icon: Heart,
+      href: '/admin/favories',
+      path: '/admin/favories'
+    },
+    {
       title: 'Gestion Livreurs',
       icon: Truck,
       href: '/admin/livreurs',
       path: '/admin/livreurs'
     },
     {
+      title: 'Gestion Admins',
+      icon: ShieldCheck,
+      href: '/admin/admins',
+      path: '/admin/admins'
+    },
+    {
       title: 'Gestion Commandes',
       icon: ClipboardList,
       href: '/admin/commandes',
       path: '/admin/commandes'
+    },
+    {
+      title: 'Gestion Annonces',
+      icon: Megaphone,
+      href: '/admin/announcements',
+      path: '/admin/announcements'
+    },
+    {
+      title: 'Gestion Notifications',
+      icon: Bell,
+      href: '/admin/notifications',
+      path: '/admin/notifications'
+    },
+    {
+      title: 'Gestion Configurations',
+      icon: Settings,
+      href: '/admin/configurations',
+      path: '/admin/configurations'
     }
   ];
+
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -70,8 +101,13 @@ export default function AdminLayout({
       '/admin/dashboard': 'Tableau de Bord',
       '/admin/restaurants': 'Gestion des Restaurants',
       '/admin/clients': 'Gestion des Clients',
+      '/admin/favories': 'Favoris des Clients',
       '/admin/livreurs': 'Gestion des Livreurs',
-      '/admin/commandes': 'Gestion des Commandes'
+      '/admin/admins': 'Gestion des Administrateurs',
+      '/admin/commandes': 'Gestion des Commandes',
+      '/admin/announcements': 'Gestion des Annonces',
+      '/admin/notifications': 'Gestion des Notifications',
+      '/admin/configurations': 'Gestion des Configurations'
     };
     return routes[pathname] || '';
   };

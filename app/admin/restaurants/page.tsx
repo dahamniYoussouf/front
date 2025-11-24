@@ -17,7 +17,8 @@ import {
   AlertCircle,
   RefreshCw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Phone
 } from 'lucide-react';
 
 // =========================
@@ -922,6 +923,15 @@ setTotalPages(calculatedTotalPages);
               <MapPin className="w-4 h-4 flex-shrink-0" />
               <span className="truncate">
                 {restaurant.address || 'Adresse non renseignée'}
+              </span>
+            </div>
+          </div>
+
+<div className="space-y-1 text-sm text-gray-600 mb-2">
+            <div className="flex items-center gap-2">
+              <Phone className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">
+                {restaurant.phone_number || 'Adresse non renseignée'}
               </span>
             </div>
           </div>

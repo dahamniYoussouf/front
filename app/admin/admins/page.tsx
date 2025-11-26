@@ -436,8 +436,8 @@ export default function AdminManagement() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="w-full">
               <h1 className="text-2xl font-bold text-gray-900">Gestion des Administrateurs</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {filteredAdmins.length} administrateur
@@ -445,17 +445,17 @@ export default function AdminManagement() {
                 {filteredAdmins.length > 1 ? 's' : ''}
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 w-full md:w-auto justify-end">
               <button
                 onClick={fetchAdmins}
                 disabled={loading}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors"
+                className="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors flex items-center justify-center"
               >
                 {loading ? 'Chargement...' : 'Actualiser'}
               </button>
               <button
                 onClick={handleOpenCreateModal}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-5 h-5" />
                 Ajouter Admin
@@ -489,7 +489,7 @@ export default function AdminManagement() {
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value as typeof filterRole)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              className="w-full sm:w-48 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">Tous les rôles</option>
               <option value="super_admin">Super Admin</option>
@@ -499,7 +499,7 @@ export default function AdminManagement() {
             <select
               value={filterActive}
               onChange={(e) => setFilterActive(e.target.value as typeof filterActive)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              className="w-full sm:w-48 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">Tous les statuts</option>
               <option value="active">Actifs</option>

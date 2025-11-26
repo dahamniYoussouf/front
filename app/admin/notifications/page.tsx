@@ -575,83 +575,91 @@ export default function AdminNotifications() {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {filteredNotifications.map((notification) => (
               <div
                 key={notification.id}
-                className={`bg-white rounded-lg shadow-sm border-l-4 p-6 transition-all hover:shadow-md ${
-                  notification.is_read ? 'opacity-75' : ''
-                } ${
-                  !notification.is_resolved ? 'border-l-red-500' : 'border-l-green-500'
+                className={`relative bg-white rounded-2xl border border-gray-200 p-4 shadow-sm hover:shadow-lg transition-all ${
+                  !notification.is_read ? 'ring-1 ring-red-100' : ''
                 }`}
               >
-                <div className="flex items-start gap-4">
-                  {/* Icon */}
-                  <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center border-2 ${getNotificationColor(notification.type)}`}>
+                {/* Status marker */}
+                <span
+                  className={`absolute top-0 left-0 w-1 h-full rounded-l-2xl ${
+                    notification.is_resolved ? 'bg-green-400' : 'bg-red-400'
+                  }`}
+                />
+
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border ${getNotificationColor(
+                      notification.type
+                    )}`}
+                  >
                     {getNotificationIcon(notification.type)}
                   </div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4 mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {getNotificationTitle(notification.type)}
-                          </h3>
+                  <div className="flex-1 min-w-0 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-gray-400">
+                          {getNotificationTitle(notification.type)}
+                        </p>
+                        <p className="text-sm text-gray-700 whitespace-pre-line">
+                          {notification.message}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[11px] text-gray-400">
+                          {formatDate(notification.created_at)}
+                        </span>
+                        <div className="flex flex-wrap gap-1 justify-end">
                           {!notification.is_read && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">
                               Nouveau
                             </span>
                           )}
                           {notification.is_resolved && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              <CheckCircle className="w-3 h-3 mr-1" />
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" />
                               Résolu
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-600 whitespace-pre-line">
-                          {notification.message}
-                        </p>
                       </div>
-                      <span className="text-xs text-gray-500 whitespace-nowrap">
-                        {formatDate(notification.created_at)}
-                      </span>
                     </div>
 
-                    {/* Order Details */}
                     {notification.order_details && (
-                      <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
                           {notification.order_details.order_number && (
                             <div>
-                              <p className="text-gray-500 text-xs">Commande</p>
-                              <p className="font-medium text-gray-900">
+                              <p className="text-gray-500">Commande</p>
+                              <p className="font-semibold text-gray-900">
                                 {notification.order_details.order_number}
                               </p>
                             </div>
                           )}
                           {notification.order_details.total_amount && (
                             <div>
-                              <p className="text-gray-500 text-xs">Montant</p>
-                              <p className="font-medium text-gray-900">
+                              <p className="text-gray-500">Montant</p>
+                              <p className="font-semibold text-gray-900">
                                 {notification.order_details.total_amount} DA
                               </p>
                             </div>
                           )}
                           {notification.order_details.client?.name && (
                             <div>
-                              <p className="text-gray-500 text-xs">Client</p>
-                              <p className="font-medium text-gray-900">
+                              <p className="text-gray-500">Client</p>
+                              <p className="font-semibold text-gray-900">
                                 {notification.order_details.client.name}
                               </p>
                             </div>
                           )}
                           {notification.order_details.client?.phone && (
                             <div>
-                              <p className="text-gray-500 text-xs">Téléphone</p>
-                              <p className="font-medium text-gray-900">
+                              <p className="text-gray-500">Téléphone</p>
+                              <p className="font-semibold text-gray-900">
                                 {notification.order_details.client.phone}
                               </p>
                             </div>
@@ -660,39 +668,37 @@ export default function AdminNotifications() {
                       </div>
                     )}
 
-                    {/* Restaurant Info */}
                     {notification.restaurant_info && (
-                      <div className="mt-3 flex items-center gap-4 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <Store className="w-4 h-4" />
+                      <div className="flex flex-wrap gap-3 text-xs text-gray-600">
+                        <div className="flex items-center gap-1.5">
+                          <Store className="w-3.5 h-3.5" />
                           <span>{notification.restaurant_info.name}</span>
                         </div>
                         {notification.restaurant_info.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="w-4 h-4" />
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5" />
                             <span>{notification.restaurant_info.phone}</span>
                           </div>
                         )}
                       </div>
                     )}
 
-                    {/* Actions */}
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {!notification.is_read && (
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}
-                          className="px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1"
+                          className="px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors flex items-center gap-1"
                         >
-                          <CheckCircle className="w-4 h-4" />
-                          Marquer comme lu
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Lu
                         </button>
                       )}
 
                       <button
                         onClick={() => handleAction(notification, 'view')}
-                        className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1"
+                        className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors flex items-center gap-1"
                       >
-                        <Eye className="w-4 h-4" />
+                        <Eye className="w-3.5 h-3.5" />
                         Détails
                       </button>
 
@@ -700,16 +706,16 @@ export default function AdminNotifications() {
                         <>
                           <button
                             onClick={() => handleAction(notification, 'force-accept')}
-                            className="px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1"
+                            className="px-3 py-1 text-xs font-medium bg-green-50 text-green-700 rounded-full hover:bg-green-100 transition-colors flex items-center gap-1"
                           >
-                            <ThumbsUp className="w-4 h-4" />
-                            Accepter de force
+                            <ThumbsUp className="w-3.5 h-3.5" />
+                            Accepter
                           </button>
                           <button
                             onClick={() => handleAction(notification, 'force-cancel')}
-                            className="px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-1"
+                            className="px-3 py-1 text-xs font-medium bg-red-50 text-red-700 rounded-full hover:bg-red-100 transition-colors flex items-center gap-1"
                           >
-                            <ThumbsDown className="w-4 h-4" />
+                            <ThumbsDown className="w-3.5 h-3.5" />
                             Annuler
                           </button>
                         </>
@@ -718,9 +724,9 @@ export default function AdminNotifications() {
                       {!notification.is_resolved && (
                         <button
                           onClick={() => handleAction(notification, 'resolve')}
-                          className="px-3 py-1.5 text-sm bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors flex items-center gap-1"
+                          className="px-3 py-1 text-xs font-medium bg-purple-50 text-purple-700 rounded-full hover:bg-purple-100 transition-colors flex items-center gap-1"
                         >
-                          <Archive className="w-4 h-4" />
+                          <Archive className="w-3.5 h-3.5" />
                           Résoudre
                         </button>
                       )}

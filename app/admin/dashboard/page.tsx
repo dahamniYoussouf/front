@@ -97,7 +97,7 @@ export default function AdminDashboard() {
       // Fetch all statistics in parallel
       console.log('📊 Fetching statistics...');
       const [ordersRes, restaurantsRes, driversRes, clientsRes] = await Promise.all([
-        fetch(`${baseURL}/api/v1/orders?limit=100`, { headers }),
+        fetch(`${baseURL}/api/v1/orders?limit=100000`, { headers }),
         fetch(`${baseURL}/api/v1/restaurants/filter`, { 
           method: 'POST',
           headers,

@@ -54,6 +54,7 @@ interface Driver {
   cancellation_count: number;
   created_at: string;
   updated_at: string;
+  profile_image_url:string;
 }
 
 type ModalType = '' | 'view' | 'edit' | 'delete' | 'create';
@@ -101,6 +102,10 @@ export default function DriverManagement() {
   const [modalType, setModalType] = useState<ModalType>('');
   const [editFormData, setEditFormData] = useState<Partial<EditDriverForm>>({});
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
+
+  // Validation states
+  const [createFormErrors, setCreateFormErrors] = useState<Record<string, string>>({});
+  const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
 
   // Create form state
   const [createForm, setCreateForm] = useState<CreateDriverForm>({
@@ -150,8 +155,8 @@ export default function DriverManagement() {
         const allDrivers = data.data as Driver[];
         setDrivers(allDrivers);
         
-        // Séparer les livreurs non vérifiés
-        const unverified = allDrivers.filter(d => !d.is_verified);
+        // Séparer les livreurs non vérifiés et non suspendus
+        const unverified = allDrivers.filter(d => !d.is_verified && d.status !== 'suspended');
         setPendingDrivers(unverified);
       } else {
         throw new Error('Format de données invalide');
@@ -218,6 +223,8 @@ export default function DriverManagement() {
     setEditFormData({});
     setSaveLoading(false);
     setError('');
+    setCreateFormErrors({});
+    setEditFormErrors({});
     // Reset create form
     setCreateForm({
       email: '',
@@ -233,16 +240,80 @@ export default function DriverManagement() {
     });
   };
 
-  const handleCreateDriver = async () => {
-    // Validation
-    if (!createForm.email || !createForm.password || !createForm.first_name || 
-        !createForm.last_name || !createForm.phone) {
-      setError('Veuillez remplir tous les champs obligatoires');
-      return;
+  // Validation functions
+  const validateEmail = (email: string): string => {
+    if (!email.trim()) return 'L\'email est obligatoire';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return 'Format d\'email invalide';
+    return '';
+  };
+
+  const validatePassword = (password: string): string => {
+    if (!password) return 'Le mot de passe est obligatoire';
+    if (password.length < 6) return 'Le mot de passe doit contenir au moins 6 caractères';
+    return '';
+  };
+
+  const validateName = (name: string, fieldName: string): string => {
+    if (!name.trim()) return `${fieldName} est obligatoire`;
+    if (name.trim().length < 2) return `${fieldName} doit contenir au moins 2 caractères`;
+    return '';
+  };
+
+  const validatePhone = (phone: string): string => {
+    if (!phone.trim()) return 'Le téléphone est obligatoire';
+    const phoneRegex = /^[\+]?[0-9\s\-\(\)]{8,}$/;
+    if (!phoneRegex.test(phone.trim())) return 'Format de téléphone invalide';
+    return '';
+  };
+
+  const validateCreateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    errors.email = validateEmail(createForm.email);
+    errors.password = validatePassword(createForm.password);
+    errors.first_name = validateName(createForm.first_name, 'Le prénom');
+    errors.last_name = validateName(createForm.last_name, 'Le nom');
+    errors.phone = validatePhone(createForm.phone);
+
+    // Remove empty errors
+    Object.keys(errors).forEach(key => {
+      if (!errors[key]) delete errors[key];
+    });
+
+    setCreateFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateEditForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (editFormData.email !== undefined) {
+      errors.email = validateEmail(editFormData.email);
+    }
+    if (editFormData.first_name !== undefined) {
+      errors.first_name = validateName(editFormData.first_name, 'Le prénom');
+    }
+    if (editFormData.last_name !== undefined) {
+      errors.last_name = validateName(editFormData.last_name, 'Le nom');
+    }
+    if (editFormData.phone !== undefined) {
+      errors.phone = validatePhone(editFormData.phone);
     }
 
-    if (createForm.password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
+    // Remove empty errors
+    Object.keys(errors).forEach(key => {
+      if (!errors[key]) delete errors[key];
+    });
+
+    setEditFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateDriver = async () => {
+    // Validation
+    if (!validateCreateForm()) {
+      setError('Veuillez corriger les erreurs dans le formulaire');
       return;
     }
 
@@ -287,6 +358,12 @@ export default function DriverManagement() {
   const handleSave = async () => {
     if (!selectedDriver) {
       setError('Aucun livreur sélectionné');
+      return;
+    }
+
+    // Validation
+    if (!validateEditForm()) {
+      setError('Veuillez corriger les erreurs dans le formulaire');
       return;
     }
 
@@ -460,6 +537,15 @@ export default function DriverManagement() {
       ...prev,
       [field]: value
     }));
+
+    // Clear field error when user starts typing
+    if (editFormErrors[field]) {
+      setEditFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
   };
 
   const handleCreateInputChange = (field: keyof CreateDriverForm, value: any) => {
@@ -467,6 +553,15 @@ export default function DriverManagement() {
       ...prev,
       [field]: value
     }));
+
+    // Clear field error when user starts typing
+    if (createFormErrors[field]) {
+      setCreateFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -502,8 +597,8 @@ export default function DriverManagement() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="w-full">
               <h1 className="text-2xl font-bold text-gray-900">Gestion des Livreurs</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {activeTab === 'all' 
@@ -512,13 +607,13 @@ export default function DriverManagement() {
                 }
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 w-full md:w-auto justify-end">
               <button
                 onClick={() => {
                   setModalType('create');
                   setShowModal(true);
                 }}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-5 h-5" />
                 Nouveau Livreur
@@ -526,7 +621,7 @@ export default function DriverManagement() {
               <button
                 onClick={fetchDrivers}
                 disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center"
               >
                 {loading ? 'Chargement...' : 'Actualiser'}
               </button>
@@ -534,7 +629,7 @@ export default function DriverManagement() {
           </div>
 
           {/* Onglets */}
-          <div className="flex gap-4 border-b mt-6">
+          <div className="flex gap-4 border-b mt-6 overflow-x-auto">
             <button
               onClick={() => setActiveTab('all')}
               className={`pb-3 px-1 border-b-2 font-medium transition-colors ${
@@ -591,7 +686,7 @@ export default function DriverManagement() {
                 onChange={(e) =>
                   setFilterStatus(e.target.value as typeof filterStatus)
                 }
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+                className="w-full sm:w-60 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
               >
                 <option value="all">Tous les statuts</option>
                 <option value="available">Disponibles</option>
@@ -646,9 +741,14 @@ export default function DriverManagement() {
                     <tr key={driver.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <Car className="w-5 h-5 text-blue-600" />
-                          </div>
+                         <img
+                            src={
+                              driver.profile_image_url ||
+                              `https://ui-avatars.com/api/?name=${driver.first_name}+${driver.last_name}&background=16a34a&color=fff`
+                            }
+                            alt={`${driver.first_name} ${driver.last_name}`}
+                            className="w-10 h-10 rounded-full"
+                          />
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
                               {driver.first_name} {driver.last_name}
@@ -913,10 +1013,17 @@ export default function DriverManagement() {
                         type="email"
                         value={createForm.email}
                         onChange={(e) => handleCreateInputChange('email', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                          createFormErrors.email 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                         placeholder="driver@example.com"
                         required
                       />
+                      {createFormErrors.email && (
+                        <p className="text-red-500 text-xs mt-1">{createFormErrors.email}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -926,11 +1033,19 @@ export default function DriverManagement() {
                         type="password"
                         value={createForm.password}
                         onChange={(e) => handleCreateInputChange('password', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                          createFormErrors.password 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                         placeholder="••••••••"
                         required
                       />
-                      <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
+                      {createFormErrors.password ? (
+                        <p className="text-red-500 text-xs mt-1">{createFormErrors.password}</p>
+                      ) : (
+                        <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -947,10 +1062,17 @@ export default function DriverManagement() {
                         type="text"
                         value={createForm.first_name}
                         onChange={(e) => handleCreateInputChange('first_name', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                          createFormErrors.first_name 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                         placeholder="Mohamed"
                         required
                       />
+                      {createFormErrors.first_name && (
+                        <p className="text-red-500 text-xs mt-1">{createFormErrors.first_name}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -960,10 +1082,17 @@ export default function DriverManagement() {
                         type="text"
                         value={createForm.last_name}
                         onChange={(e) => handleCreateInputChange('last_name', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                          createFormErrors.last_name 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                         placeholder="Benali"
                         required
                       />
+                      {createFormErrors.last_name && (
+                        <p className="text-red-500 text-xs mt-1">{createFormErrors.last_name}</p>
+                      )}
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -973,10 +1102,17 @@ export default function DriverManagement() {
                         type="tel"
                         value={createForm.phone}
                         onChange={(e) => handleCreateInputChange('phone', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                          createFormErrors.phone 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                         placeholder="+213 XXX XXX XXX"
                         required
                       />
+                      {createFormErrors.phone && (
+                        <p className="text-red-500 text-xs mt-1">{createFormErrors.phone}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1209,8 +1345,15 @@ export default function DriverManagement() {
                           handleInputChange('first_name', e.target.value)
                         }
                         disabled={modalType === 'view'}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 ${
+                          modalType === 'edit' && editFormErrors.first_name 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                       />
+                      {modalType === 'edit' && editFormErrors.first_name && (
+                        <p className="text-red-500 text-xs mt-1">{editFormErrors.first_name}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1227,8 +1370,15 @@ export default function DriverManagement() {
                           handleInputChange('last_name', e.target.value)
                         }
                         disabled={modalType === 'view'}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 ${
+                          modalType === 'edit' && editFormErrors.last_name 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                       />
+                      {modalType === 'edit' && editFormErrors.last_name && (
+                        <p className="text-red-500 text-xs mt-1">{editFormErrors.last_name}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1245,8 +1395,15 @@ export default function DriverManagement() {
                           handleInputChange('phone', e.target.value)
                         }
                         disabled={modalType === 'view'}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 ${
+                          modalType === 'edit' && editFormErrors.phone 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                       />
+                      {modalType === 'edit' && editFormErrors.phone && (
+                        <p className="text-red-500 text-xs mt-1">{editFormErrors.phone}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1263,8 +1420,15 @@ export default function DriverManagement() {
                           handleInputChange('email', e.target.value)
                         }
                         disabled={modalType === 'view'}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 ${
+                          modalType === 'edit' && editFormErrors.email 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                       />
+                      {modalType === 'edit' && editFormErrors.email && (
+                        <p className="text-red-500 text-xs mt-1">{editFormErrors.email}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">

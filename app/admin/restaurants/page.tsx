@@ -106,12 +106,18 @@ interface CreateRestaurantForm {
 interface EditRestaurantForm {
   name: string;
   address: string;
-    phone_number: string;
-
+  phone_number: string;
   description: string;
   is_active: boolean;
   is_premium: boolean;
   categories: CategoryValue[];
+  email?: string;
+  lat?: string;
+  lng?: string;
+  rating?: number;
+  image_url?: string;
+  opening_hours?: Partial<OpeningHours>;
+  status?: RestaurantStatus;
 }
 
 // =========================
@@ -346,8 +352,11 @@ export default function AdminRestaurantManagement() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [filteredRestaurants, setFilteredRestaurants] = useState<Restaurant[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Restaurant[]>([]);
+  const [filteredPendingRequests, setFilteredPendingRequests] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [pendingSearchQuery, setPendingSearchQuery] = useState<string>('');
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
 
   const [filterStatus, setFilterStatus] = useState<RestaurantStatus | 'all'>('all');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
@@ -370,8 +379,15 @@ export default function AdminRestaurantManagement() {
     description: '',
     is_active: true,
     is_premium: false,
-    phone_number:'',
-    categories: []
+    phone_number: '',
+    categories: [],
+    email: '',
+    lat: '',
+    lng: '',
+    rating: 0,
+    image_url: '',
+    opening_hours: {},
+    status: undefined
   });
   const [notification, setNotification] = useState<NotificationState | null>(null);
 
@@ -402,6 +418,12 @@ export default function AdminRestaurantManagement() {
 
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [editUploadingImage, setEditUploadingImage] = useState<boolean>(false);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+
+  // Validation states
+  const [createFormErrors, setCreateFormErrors] = useState<Record<string, string>>({});
+  const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
 
   // Reset page when filters change
   useEffect(() => {
@@ -418,6 +440,25 @@ export default function AdminRestaurantManagement() {
   useEffect(() => {
     applySearchFilter();
   }, [restaurants, searchQuery]);
+
+  // Apply search filter for pending requests
+  useEffect(() => {
+    applyPendingSearchFilter();
+  }, [pendingRequests, pendingSearchQuery]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openDropdownId !== null) {
+        setOpenDropdownId(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [openDropdownId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -449,6 +490,7 @@ setTotalPages(calculatedTotalPages);
       } else {
         const result = await api.getPendingRequests();
         setPendingRequests(result.data);
+        setFilteredPendingRequests(result.data);
       }
     } catch (error) {
       console.error('❌ Error:', error);
@@ -470,9 +512,148 @@ setTotalPages(calculatedTotalPages);
     setFilteredRestaurants(filtered);
   };
 
+  const applyPendingSearchFilter = () => {
+    let filtered = [...pendingRequests];
+    if (pendingSearchQuery.trim()) {
+      const query = pendingSearchQuery.toLowerCase();
+      filtered = filtered.filter((r) =>
+        r.name?.toLowerCase().includes(query) ||
+        r.address?.toLowerCase().includes(query) ||
+        r.email?.toLowerCase().includes(query) ||
+        r.phone_number?.toLowerCase().includes(query) ||
+        r.categories?.some(cat => cat.toLowerCase().includes(query))
+      );
+    }
+    setFilteredPendingRequests(filtered);
+  };
+
   const showNotification = (message: string, type: NotificationType = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
+  };
+
+  // Validation functions
+  const validateEmail = (email: string): string => {
+    if (!email.trim()) return 'L\'email est obligatoire';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return 'Format d\'email invalide';
+    return '';
+  };
+
+  const validatePassword = (password: string): string => {
+    if (!password) return 'Le mot de passe est obligatoire';
+    if (password.length < 6) return 'Le mot de passe doit contenir au moins 6 caractères';
+    return '';
+  };
+
+  const validateName = (name: string): string => {
+    if (!name.trim()) return 'Le nom est obligatoire';
+    if (name.trim().length < 2) return 'Le nom doit contenir au moins 2 caractères';
+    return '';
+  };
+
+  const validateAddress = (address: string): string => {
+    if (!address.trim()) return 'L\'adresse est obligatoire';
+    if (address.trim().length < 5) return 'L\'adresse doit contenir au moins 5 caractères';
+    return '';
+  };
+
+  const validatePhone = (phone: string): string => {
+    if (!phone.trim()) return 'Le téléphone est obligatoire';
+    const phoneRegex = /^[\+]?[0-9\s\-\(\)]{8,}$/;
+    if (!phoneRegex.test(phone.trim())) return 'Format de téléphone invalide';
+    return '';
+  };
+
+  const validateCoordinate = (coord: string, type: 'latitude' | 'longitude'): string => {
+    if (!coord.trim()) return `${type === 'latitude' ? 'La latitude' : 'La longitude'} est obligatoire`;
+    const num = parseFloat(coord);
+    if (isNaN(num)) return `${type === 'latitude' ? 'La latitude' : 'La longitude'} doit être un nombre`;
+    if (type === 'latitude' && (num < -90 || num > 90)) return 'La latitude doit être entre -90 et 90';
+    if (type === 'longitude' && (num < -180 || num > 180)) return 'La longitude doit être entre -180 et 180';
+    return '';
+  };
+
+  const validateCreateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    errors.email = validateEmail(createForm.email);
+    errors.password = validatePassword(createForm.password);
+    errors.name = validateName(createForm.name);
+    errors.address = validateAddress(createForm.address);
+    errors.phone_number = validatePhone(createForm.phone_number);
+    errors.lat = validateCoordinate(createForm.lat, 'latitude');
+    errors.lng = validateCoordinate(createForm.lng, 'longitude');
+
+    if (createForm.categories.length === 0) {
+      errors.categories = 'Veuillez sélectionner au moins une catégorie';
+    }
+
+    // Remove empty errors
+    Object.keys(errors).forEach(key => {
+      if (!errors[key]) delete errors[key];
+    });
+
+    setCreateFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateEditForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (editForm.email !== undefined && editForm.email !== '') {
+      errors.email = validateEmail(editForm.email);
+    }
+    if (editForm.name) {
+      errors.name = validateName(editForm.name);
+    }
+    if (editForm.address) {
+      errors.address = validateAddress(editForm.address);
+    }
+    if (editForm.phone_number) {
+      errors.phone_number = validatePhone(editForm.phone_number);
+    }
+    if (editForm.lat) {
+      errors.lat = validateCoordinate(editForm.lat, 'latitude');
+    }
+    if (editForm.lng) {
+      errors.lng = validateCoordinate(editForm.lng, 'longitude');
+    }
+
+    // Remove empty errors
+    Object.keys(errors).forEach(key => {
+      if (!errors[key]) delete errors[key];
+    });
+
+    setEditFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Helper functions to handle form changes with error clearing
+  const handleCreateFormChange = (field: keyof CreateRestaurantForm, value: any) => {
+    setCreateForm(prev => ({ ...prev, [field]: value }));
+    
+    // Clear field error when user starts typing
+    if (createFormErrors[field]) {
+      setCreateFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleEditFormChange = (field: keyof EditRestaurantForm, value: any) => {
+    setEditForm(prev => ({ ...prev, [field]: value }));
+    
+    // Clear field error when user starts typing
+    if (editFormErrors[field]) {
+      setEditFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
   };
 
   const handlePageChange = (newPage: number) => {
@@ -540,21 +721,60 @@ setTotalPages(calculatedTotalPages);
     setImagePreview(null);
   };
 
-  const handleCreateRestaurant = async () => {
-    if (
-      !createForm.email ||
-      !createForm.password ||
-      !createForm.name ||
-      !createForm.address ||
-      !createForm.lat ||
-      !createForm.lng
-    ) {
-      showNotification('Veuillez remplir tous les champs obligatoires', 'error');
+  const handleEditImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showNotification('Veuillez sélectionner une image valide', 'error');
       return;
     }
 
-    if (createForm.categories.length === 0) {
-      showNotification('Veuillez sélectionner au moins une catégorie', 'error');
+    if (file.size > 5 * 1024 * 1024) {
+      showNotification("L'image ne doit pas dépasser 5 MB", 'error');
+      return;
+    }
+
+    setEditUploadingImage(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error("Échec de l'upload de l'image");
+      }
+
+      const data = await response.json();
+
+      setEditForm((prev) => ({ ...prev, image_url: data.url }));
+      setEditImagePreview(URL.createObjectURL(file));
+      showNotification('Image uploadée avec succès');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      showNotification("Erreur lors de l'upload de l'image", 'error');
+    } finally {
+      setEditUploadingImage(false);
+    }
+  };
+
+  const removeEditImage = () => {
+    setEditForm((prev) => ({ ...prev, image_url: '' }));
+    setEditImagePreview(null);
+  };
+
+  const handleCreateRestaurant = async () => {
+    if (!validateCreateForm()) {
+      showNotification('Veuillez corriger les erreurs dans le formulaire', 'error');
       return;
     }
 
@@ -631,17 +851,35 @@ setTotalPages(calculatedTotalPages);
     setEditForm({
       name: restaurant.name || '',
       address: restaurant.address || '',
-          phone_number: restaurant.phone_number || '',  // ✅ AJOUTER
+      phone_number: restaurant.phone_number || '',
       description: restaurant.description || '',
       is_active: restaurant.is_active ?? true,
       is_premium: restaurant.is_premium ?? false,
-      categories: restaurant.categories || []
+      categories: restaurant.categories || [],
+      email: restaurant.email || '',
+      lat: restaurant.lat || '',
+      lng: restaurant.lng || '',
+      rating:
+        typeof restaurant.rating === 'number'
+          ? restaurant.rating
+          : restaurant.rating
+          ? parseFloat(String(restaurant.rating))
+          : 0,
+      image_url: restaurant.image_url || '',
+      opening_hours: restaurant.opening_hours || {},
+      status: restaurant.status
     });
+    setEditImagePreview(restaurant.image_url || null);
     setShowEditModal(true);
   };
 
   const handleSaveEdit = async () => {
     if (!selectedRestaurant) return;
+
+    if (!validateEditForm()) {
+      showNotification('Veuillez corriger les erreurs dans le formulaire', 'error');
+      return;
+    }
 
     try {
       await api.updateRestaurant(selectedRestaurant.id, editForm);
@@ -845,29 +1083,21 @@ setTotalPages(calculatedTotalPages);
   };
 
   const RestaurantCard: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => (
-    <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-4">
-      <div className="flex gap-4">
+    <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow p-4">
+      <div className="flex flex-col sm:flex-row gap-4">
         <img
-          src={restaurant.image_url || 'https://via.placeholder.com/80'}
+          src={restaurant.image_url || 'https://via.placeholder.com/120'}
           alt={restaurant.name}
-          className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+          className="w-full h-44 sm:w-28 sm:h-28 rounded-xl object-cover"
         />
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 truncate">
-                {restaurant.name}
-              </h3>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <div className="flex items-center">
-                  <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                  <span className="text-sm text-gray-600 ml-1">
-                    {restaurant.rating
-                      ? parseFloat(String(restaurant.rating)).toFixed(1)
-                      : '0.0'}
-                  </span>
-                </div>
+        <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-semibold text-gray-900 truncate">
+                  {restaurant.name}
+                </h3>
                 {restaurant.is_premium && (
                   <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
                     Premium
@@ -875,68 +1105,87 @@ setTotalPages(calculatedTotalPages);
                 )}
                 <StatusBadge status={restaurant.status} />
               </div>
+              <div className="flex items-center gap-1 mt-1 text-sm text-gray-600">
+                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                <span>
+                  {restaurant.rating
+                    ? parseFloat(String(restaurant.rating)).toFixed(1)
+                    : '0.0'}
+                </span>
+              </div>
             </div>
 
-            <div className="relative group">
-              <button className="p-1 hover:bg-gray-100 rounded">
-                <MoreVertical className="w-5 h-5 text-gray-400" />
+            <div className="relative self-start">
+              <button 
+                onClick={() => setOpenDropdownId(openDropdownId === restaurant.id ? null : restaurant.id)}
+                className="p-1.5 rounded-full border border-gray-200 hover:bg-gray-50"
+              >
+                <MoreVertical className="w-5 h-5 text-gray-500" />
               </button>
-              <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 hidden group-hover:block z-10">
-                <button
-                  onClick={() => handleViewDetails(restaurant)}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Eye className="w-4 h-4" />
-                  Voir détails
-                </button>
-                <button
-                  onClick={() => handleEdit(restaurant)}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <Edit className="w-4 h-4" />
-                  Modifier
-                </button>
-                <button
-                  onClick={() => handleDelete(restaurant.id)}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Supprimer
-                </button>
-              </div>
+              {openDropdownId === restaurant.id && (
+                <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-10">
+                  <button
+                    onClick={() => {
+                      handleViewDetails(restaurant);
+                      setOpenDropdownId(null);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Voir détails
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleEdit(restaurant);
+                      setOpenDropdownId(null);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Modifier
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleDelete(restaurant.id);
+                      setOpenDropdownId(null);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Supprimer
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-1 mb-2">
+          <div className="flex flex-wrap gap-2">
             {restaurant.categories?.map((cat, idx) => (
               <span
                 key={`${cat}-${idx}`}
-                className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded"
+                className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full"
               >
                 {cat}
               </span>
             ))}
           </div>
 
-          <div className="space-y-1 text-sm text-gray-600 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
             <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 flex-shrink-0" />
+              <MapPin className="w-4 h-4 text-gray-400" />
               <span className="truncate">
                 {restaurant.address || 'Adresse non renseignée'}
               </span>
             </div>
-          </div>
-
-<div className="space-y-1 text-sm text-gray-600 mb-2">
             <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 flex-shrink-0" />
+              <Phone className="w-4 h-4 text-gray-400" />
               <span className="truncate">
-                {restaurant.phone_number || 'Adresse non renseignée'}
+                {restaurant.phone_number || 'Téléphone non renseigné'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -957,6 +1206,20 @@ setTotalPages(calculatedTotalPages);
               />
               <span className="text-sm text-gray-700">Premium</span>
             </label>
+            <div className="md:hidden flex gap-2 w-full">
+              <button
+                onClick={() => handleViewDetails(restaurant)}
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg"
+              >
+                Détails
+              </button>
+              <button
+                onClick={() => handleEdit(restaurant)}
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg"
+              >
+                Modifier
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1046,21 +1309,21 @@ setTotalPages(calculatedTotalPages);
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
             <h1 className="text-2xl font-bold text-gray-900">
               Gestion des Restaurants
             </h1>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 md:gap-3 justify-end">
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
               >
                 <Plus className="w-5 h-5" />
                 Nouveau Restaurant
               </button>
               <button
                 onClick={loadData}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"
               >
                 <RefreshCw className="w-5 h-5" />
                 Actualiser
@@ -1068,7 +1331,7 @@ setTotalPages(calculatedTotalPages);
             </div>
           </div>
 
-          <div className="flex gap-4 border-b">
+          <div className="flex gap-4 border-b overflow-x-auto">
             <button
               onClick={() => setActiveTab('all')}
               className={`pb-3 px-1 border-b-2 font-medium transition-colors ${
@@ -1102,7 +1365,7 @@ setTotalPages(calculatedTotalPages);
       {activeTab === 'all' && (
         <div className="bg-white border-b">
           <div className="max-w-7xl mx-auto px-4 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1221,7 +1484,7 @@ setTotalPages(calculatedTotalPages);
           </div>
         ) : activeTab === 'all' ? (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredRestaurants.map((restaurant) => (
                 <RestaurantCard key={restaurant.id} restaurant={restaurant} />
               ))}
@@ -1238,20 +1501,37 @@ setTotalPages(calculatedTotalPages);
             <h2 className="text-lg font-semibold text-gray-900 mb-2">
               Demandes en attente
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-4">
               Consultez et gérez les demandes d'inscription des nouveaux
               restaurants.
             </p>
-            {pendingRequests.length > 0 ? (
+            
+            {/* Search bar for pending requests */}
+            <div className="mb-6">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom, adresse, email, téléphone..."
+                  value={pendingSearchQuery}
+                  onChange={(e) => setPendingSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+
+            {filteredPendingRequests.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pendingRequests.map((request) => (
+                {filteredPendingRequests.map((request) => (
                   <PendingRequestCard key={request.id} request={request} />
                 ))}
               </div>
             ) : (
               <div className="text-center py-12 bg-white rounded-lg">
                 <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                <p className="text-gray-500">Aucune demande en attente</p>
+                <p className="text-gray-500">
+                  {pendingSearchQuery.trim() ? 'Aucune demande trouvée pour cette recherche' : 'Aucune demande en attente'}
+                </p>
               </div>
             )}
           </div>
@@ -1453,6 +1733,21 @@ setTotalPages(calculatedTotalPages);
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editForm.email || ''}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, email: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="restaurant@example.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Description
                   </label>
                   <textarea
@@ -1464,6 +1759,102 @@ setTotalPages(calculatedTotalPages);
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="Description du restaurant"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Image du restaurant
+                  </label>
+                  <div className="space-y-4">
+                    {(editImagePreview || editForm.image_url) && (
+                      <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200">
+                        <img
+                          src={editImagePreview || editForm.image_url || ''}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={removeEditImage}
+                          className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <label className="flex-1 cursor-pointer">
+                        <div className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors">
+                          {editUploadingImage ? (
+                            <>
+                              <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-green-600"></div>
+                              <span className="text-sm text-gray-600">
+                                Upload en cours...
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <svg
+                                className="w-5 h-5 text-gray-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                />
+                              </svg>
+                              <span className="text-sm font-medium text-gray-700">
+                                Télécharger une image
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleEditImageUpload}
+                          className="hidden"
+                          disabled={editUploadingImage}
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = prompt("Entrez l'URL de l'image:");
+                          if (url) {
+                            setEditForm({ ...editForm, image_url: url });
+                            setEditImagePreview(null);
+                          }
+                        }}
+                        className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        title="Entrer une URL manuellement"
+                      >
+                        <svg
+                          className="w-5 h-5 text-gray-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      Formats acceptés: JPG, PNG, GIF. Taille max: 5 MB
+                    </p>
+                  </div>
                 </div>
 
                 <div>
@@ -1494,6 +1885,58 @@ setTotalPages(calculatedTotalPages);
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="+213 555 123 456"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Note (0-5)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="5"
+                    step="0.1"
+                    value={editForm.rating ?? 0}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        rating: parseFloat(e.target.value) || 0
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="4.5"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Latitude
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.lat || ''}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, lat: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="36.7309715"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Longitude
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.lng || ''}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, lng: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="3.1670642"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -1564,6 +2007,74 @@ setTotalPages(calculatedTotalPages);
                       Compte Premium
                     </span>
                   </label>
+
+                  <details className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                    <summary className="text-sm font-semibold cursor-pointer">
+                      Horaires d&apos;ouverture (optionnel)
+                    </summary>
+                    <div className="mt-3 space-y-2">
+                      {DAYS_OF_WEEK.map((day) => (
+                        <div
+                          key={day.value}
+                          className="flex items-center gap-3 text-sm"
+                        >
+                          <span className="w-24 font-medium text-gray-700">
+                            {day.label}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="2359"
+                            value={
+                              editForm.opening_hours?.[day.value]?.open ?? 900
+                            }
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                opening_hours: {
+                                  ...(editForm.opening_hours || {}),
+                                  [day.value]: {
+                                    ...(editForm.opening_hours?.[day.value] ||
+                                      {}),
+                                    open: parseInt(e.target.value) || 900
+                                  }
+                                }
+                              })
+                            }
+                            className="w-24 px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                            placeholder="900"
+                          />
+                          <span className="text-gray-600">à</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="2359"
+                            value={
+                              editForm.opening_hours?.[day.value]?.close ?? 1800
+                            }
+                            onChange={(e) =>
+                              setEditForm({
+                                ...editForm,
+                                opening_hours: {
+                                  ...(editForm.opening_hours || {}),
+                                  [day.value]: {
+                                    ...(editForm.opening_hours?.[day.value] ||
+                                      {}),
+                                    close: parseInt(e.target.value) || 1800
+                                  }
+                                }
+                              })
+                            }
+                            className="w-24 px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                            placeholder="1800"
+                          />
+                          <span className="text-xs text-gray-500">
+                            (HHMM, ex: 900 = 9h00)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 </div>
               </div>
 

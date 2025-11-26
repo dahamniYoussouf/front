@@ -350,8 +350,8 @@ export default function AnnouncementManagement() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="w-full">
               <h1 className="text-2xl font-bold text-gray-900">Gestion des Annonces</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {filteredAnnouncements.length} annonce
@@ -359,17 +359,17 @@ export default function AnnouncementManagement() {
                 {filteredAnnouncements.length > 1 ? 's' : ''}
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 w-full md:w-auto justify-end">
               <button
                 onClick={fetchAnnouncements}
                 disabled={loading}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors"
+                className="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors flex items-center justify-center"
               >
                 {loading ? 'Chargement...' : 'Actualiser'}
               </button>
               <button
                 onClick={() => handleAction(null, 'create')}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-5 h-5" />
                 Nouvelle Annonce
@@ -403,7 +403,7 @@ export default function AnnouncementManagement() {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as typeof filterType)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
+              className="w-full sm:w-48 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">Tous les types</option>
               <option value="info">Info</option>
@@ -414,7 +414,7 @@ export default function AnnouncementManagement() {
             <select
               value={filterActive}
               onChange={(e) => setFilterActive(e.target.value as typeof filterActive)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
+              className="w-full sm:w-48 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">Tous les statuts</option>
               <option value="active">Actives</option>

@@ -299,9 +299,8 @@ export default function ClientFavorites() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-4 mb-6">
-            
-            <div className="flex-1">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+            <div className="flex-1 w-full">
               <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                 Gestion des Favoris
               </h1>
@@ -312,17 +311,17 @@ export default function ClientFavorites() {
             <button
               onClick={fetchFavorites}
               disabled={loading}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
               {loading ? 'Chargement...' : 'Actualiser'}
             </button>
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 mb-6">
+          <div className="flex flex-wrap gap-2 mb-6 overflow-x-auto">
             <button
               onClick={() => setActiveTab('restaurants')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors w-full sm:w-auto ${
                 activeTab === 'restaurants'
                   ? 'bg-red-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -336,7 +335,7 @@ export default function ClientFavorites() {
             </button>
             <button
               onClick={() => setActiveTab('meals')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors w-full sm:w-auto ${
                 activeTab === 'meals'
                   ? 'bg-red-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -378,7 +377,7 @@ export default function ClientFavorites() {
               <select
                 value={filterTag}
                 onChange={(e) => setFilterTag(e.target.value)}
-                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none bg-white"
+                className="w-full sm:w-56 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none bg-white"
               >
                 <option value="all">Tous les tags</option>
                 {allTags.map((tag) => (
@@ -400,10 +399,17 @@ export default function ClientFavorites() {
           </div>
         ) : activeTab === 'restaurants' ? (
           // Liste des restaurants favoris
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRestaurants.map((fav) => (
-              <div
-  key={`${fav.favorite_uuid}-${fav.restaurant.id}`}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredRestaurants.map((fav, idx) => {
+              const baseRestaurantKey =
+                fav.favorite_uuid ||
+                fav.restaurant?.id ||
+                fav.client?.id ||
+                `restaurant-${idx}`;
+
+              return (
+                <div
+                  key={`restaurant-card-${baseRestaurantKey}`}
                 className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden"
               >
                 <div className="relative h-48">
@@ -446,9 +452,9 @@ export default function ClientFavorites() {
                   
                   {fav.tags && fav.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-3">
-                      {fav.tags.map((tag, idx) => (
+                      {fav.tags.map((tag, tagIdx) => (
                         <span
-                              key={`${fav.favorite_uuid}-${tag}`}
+                          key={`tag-${baseRestaurantKey}-${tag}-${tagIdx}`}
                           className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full"
                         >
                           <Tag className="w-3 h-3" />
@@ -472,7 +478,8 @@ export default function ClientFavorites() {
                  
                 </div>
               </div>
-            ))}
+              );
+            })}
             
             {filteredRestaurants.length === 0 && (
               <div className="col-span-full text-center py-12">
@@ -488,10 +495,17 @@ export default function ClientFavorites() {
           </div>
         ) : (
           // Liste des plats favoris
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredMeals.map((fav) => (
-              <div
-  key={`${fav.favorite_uuid}-${fav.meal.id}`}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredMeals.map((fav, idx) => {
+              const baseMealKey =
+                fav.favorite_uuid ||
+                fav.meal?.id ||
+                fav.client?.id ||
+                `meal-${idx}`;
+
+              return (
+                <div
+                  key={`meal-card-${baseMealKey}`}
                 className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden"
               >
                 <div className="relative h-48">
@@ -551,7 +565,8 @@ export default function ClientFavorites() {
                   
                 </div>
               </div>
-            ))}
+              );
+            })}
             
             {filteredMeals.length === 0 && (
               <div className="col-span-full text-center py-12">

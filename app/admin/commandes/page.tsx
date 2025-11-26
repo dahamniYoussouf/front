@@ -16,7 +16,9 @@ import {
   Store,
   AlertCircle,
   Filter,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -137,11 +139,12 @@ export default function OrderManagement() {
     total_items: 0
   });
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   // Fetch orders from backend
   useEffect(() => {
     fetchOrders();
-  }, [currentPage, filterStatus, filterType]);
+  }, [currentPage, filterStatus, filterType, pageSize]);
 
   const fetchOrders = async () => {
     try {
@@ -158,7 +161,7 @@ export default function OrderManagement() {
       // Build query parameters
       const params = new URLSearchParams({
         page: currentPage.toString(),
-        limit: '20'
+        limit: pageSize.toString()
       });
 
       if (filterStatus !== 'all') {
@@ -375,6 +378,38 @@ export default function OrderManagement() {
     }).format(amount);
   };
 
+  const totalItems = pagination.total_items || 0;
+  const totalPages = Math.max(1, pagination.total_pages || 1);
+
+  const handlePageChange = (page: number) => {
+    if (loading) return;
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  };
+
+  const handlePageSizeChange = (value: number) => {
+    setPageSize(value);
+    setCurrentPage(1);
+  };
+
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+
+    return pages;
+  };
+  const pageNumbers = getPageNumbers();
+
   const getStatusBadge = (status: OrderStatus) => {
     const statusConfig = {
       pending: { label: 'En attente', class: 'bg-yellow-100 text-yellow-800' },
@@ -439,21 +474,21 @@ export default function OrderManagement() {
           )}
 
           {/* Search and Filters */}
-          <div className="mt-6 flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Rechercher par n° commande, client ou restaurant..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">Tous les statuts</option>
               <option value="pending">En attente</option>
@@ -467,7 +502,7 @@ export default function OrderManagement() {
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as typeof filterType)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
             >
               <option value="all">Tous les types</option>
               <option value="delivery">Livraison</option>
@@ -639,26 +674,99 @@ export default function OrderManagement() {
             )}
 
             {/* Pagination */}
-            {pagination.total_pages > 1 && (
-              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-500">
-                  Page {pagination.current_page} sur {pagination.total_pages}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={pagination.current_page === 1}
-                    className="px-3 py-1 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Précédent
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(pagination.total_pages, prev + 1))}
-                    disabled={pagination.current_page === pagination.total_pages}
-                    className="px-3 py-1 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Suivant
-                  </button>
+            {!loading && (
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="text-sm text-gray-700">
+                      Affichage de{' '}
+                      <span className="font-medium">
+                        {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+                      </span>{' '}
+                      à{' '}
+                      <span className="font-medium">
+                        {Math.min(currentPage * pageSize, totalItems)}
+                      </span>{' '}
+                      sur <span className="font-medium">{totalItems}</span> résultats
+                    </div>
+
+                    <select
+                      value={pageSize}
+                      onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                      className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none bg-white"
+                    >
+                      {[10, 20, 50, 100].map((size) => (
+                        <option key={`order-page-size-${size}`} value={size}>
+                          {size} par page
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1 || loading}
+                      className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 transition-colors bg-white"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span className="hidden sm:inline">Précédent</span>
+                    </button>
+
+                    {pageNumbers[0] > 1 && (
+                      <>
+                        <button
+                          onClick={() => handlePageChange(1)}
+                          disabled={loading}
+                          className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-white bg-white"
+                        >
+                          1
+                        </button>
+                        {pageNumbers[0] > 2 && (
+                          <span className="px-2 text-gray-500">...</span>
+                        )}
+                      </>
+                    )}
+
+                    {pageNumbers.map((page) => (
+                      <button
+                        key={`order-page-${page}`}
+                        onClick={() => handlePageChange(page)}
+                        disabled={loading}
+                        className={`px-3 py-2 border rounded-lg transition-colors ${
+                          currentPage === page
+                            ? 'bg-green-600 text-white border-green-600 font-medium'
+                            : 'border-gray-300 hover:bg-white bg-white'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    {pageNumbers[pageNumbers.length - 1] < totalPages && (
+                      <>
+                        {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
+                          <span className="px-2 text-gray-500">...</span>
+                        )}
+                        <button
+                          onClick={() => handlePageChange(totalPages)}
+                          disabled={loading}
+                          className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-white bg-white"
+                        >
+                          {totalPages}
+                        </button>
+                      </>
+                    )}
+
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages || loading}
+                      className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 transition-colors bg-white"
+                    >
+                      <span className="hidden sm:inline">Suivant</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

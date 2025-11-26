@@ -6,7 +6,6 @@ import {
   Search,
   MapPin,
   Star,
-  MoreVertical,
   CheckCircle,
   XCircle,
   Eye,
@@ -356,7 +355,6 @@ export default function AdminRestaurantManagement() {
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pendingSearchQuery, setPendingSearchQuery] = useState<string>('');
-  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
 
   const [filterStatus, setFilterStatus] = useState<RestaurantStatus | 'all'>('all');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
@@ -446,19 +444,6 @@ export default function AdminRestaurantManagement() {
     applyPendingSearchFilter();
   }, [pendingRequests, pendingSearchQuery]);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (openDropdownId !== null) {
-        setOpenDropdownId(null);
-      }
-    };
-
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [openDropdownId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1103,143 +1088,140 @@ setTotalPages(calculatedTotalPages);
     );
   };
 
-  const RestaurantCard: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => (
-    <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow p-4">
-      <div className="flex flex-col sm:flex-row gap-4">
-        <img
-          src={restaurant.image_url || 'https://via.placeholder.com/120'}
-          alt={restaurant.name}
-          className="w-full h-44 sm:w-28 sm:h-28 rounded-xl object-cover"
-        />
+  const RestaurantListItem: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => (
+    <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-4">
+      <div className="flex items-center gap-4">
+        {/* Image */}
+        <div className="relative flex-shrink-0">
+          <img
+            src={restaurant.image_url || 'https://via.placeholder.com/80'}
+            alt={restaurant.name}
+            className="w-20 h-20 rounded-lg object-cover"
+          />
+          {restaurant.is_premium && (
+            <div className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+              <Star className="w-2.5 h-2.5 fill-white" />
+            </div>
+          )}
+        </div>
 
-        <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        {/* Info principale */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-gray-900 truncate">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-semibold text-gray-900 truncate text-lg">
                   {restaurant.name}
                 </h3>
-                {restaurant.is_premium && (
-                  <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
-                    Premium
-                  </span>
-                )}
                 <StatusBadge status={restaurant.status} />
               </div>
-              <div className="flex items-center gap-1 mt-1 text-sm text-gray-600">
-                <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                <span>
-                  {restaurant.rating
-                    ? parseFloat(String(restaurant.rating)).toFixed(1)
-                    : '0.0'}
-                </span>
+              <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                <div className="flex items-center gap-1">
+                  <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                  <span className="font-medium">
+                    {restaurant.rating
+                      ? parseFloat(String(restaurant.rating)).toFixed(1)
+                      : '0.0'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4 text-gray-400" />
+                  <span className="truncate max-w-xs">
+                    {restaurant.address || 'Adresse non renseignée'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Phone className="w-4 h-4 text-gray-400" />
+                  <span>
+                    {restaurant.phone_number || 'N/A'}
+                  </span>
+                </div>
               </div>
-            </div>
-
-            <div className="relative self-start">
-              <button 
-                onClick={() => setOpenDropdownId(openDropdownId === restaurant.id ? null : restaurant.id)}
-                className="p-1.5 rounded-full border border-gray-200 hover:bg-gray-50"
-              >
-                <MoreVertical className="w-5 h-5 text-gray-500" />
-              </button>
-              {openDropdownId === restaurant.id && (
-                <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-10">
-                  <button
-                    onClick={() => {
-                      handleViewDetails(restaurant);
-                      setOpenDropdownId(null);
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                  >
-                    <Eye className="w-4 h-4" />
-                    Voir détails
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleEdit(restaurant);
-                      setOpenDropdownId(null);
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                  >
-                    <Edit className="w-4 h-4" />
-                    Modifier
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleDelete(restaurant.id);
-                      setOpenDropdownId(null);
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Supprimer
-                  </button>
+              {restaurant.categories && restaurant.categories.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {restaurant.categories.map((cat, idx) => (
+                    <span
+                      key={`${cat}-${idx}`}
+                      className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-medium rounded-md border border-blue-100"
+                    >
+                      {cat}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="flex flex-wrap gap-2">
-            {restaurant.categories?.map((cat, idx) => (
-              <span
-                key={`${cat}-${idx}`}
-                className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full"
-              >
-                {cat}
-              </span>
-            ))}
-          </div>
+            {/* Toggles et actions */}
+            <div className="flex items-center gap-4">
+              {/* Toggles */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="bg-green-100 p-1.5 rounded-lg">
+                    <CheckCircle className={`w-4 h-4 ${restaurant.is_active ? 'text-green-600' : 'text-gray-400'}`} />
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={restaurant.is_active}
+                      onChange={() => handleToggleActive(restaurant)}
+                      className="sr-only"
+                    />
+                    <div className={`w-10 h-5 rounded-full transition-colors duration-200 ${
+                      restaurant.is_active ? 'bg-green-500' : 'bg-gray-300'
+                    }`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform duration-200 mt-0.5 ${
+                        restaurant.is_active ? 'translate-x-5' : 'translate-x-0.5'
+                      }`} />
+                    </div>
+                  </label>
+                </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-gray-400" />
-              <span className="truncate">
-                {restaurant.address || 'Adresse non renseignée'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-gray-400" />
-              <span className="truncate">
-                {restaurant.phone_number || 'Téléphone non renseigné'}
-              </span>
-            </div>
-          </div>
+                <div className="flex items-center gap-2">
+                  <div className="bg-yellow-100 p-1.5 rounded-lg">
+                    <Star className={`w-4 h-4 ${restaurant.is_premium ? 'text-yellow-600 fill-yellow-600' : 'text-gray-400'}`} />
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={restaurant.is_premium}
+                      onChange={() => handleTogglePremium(restaurant)}
+                      className="sr-only"
+                    />
+                    <div className={`w-10 h-5 rounded-full transition-colors duration-200 ${
+                      restaurant.is_premium ? 'bg-yellow-500' : 'bg-gray-300'
+                    }`}>
+                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform duration-200 mt-0.5 ${
+                        restaurant.is_premium ? 'translate-x-5' : 'translate-x-0.5'
+                      }`} />
+                    </div>
+                  </label>
+                </div>
+              </div>
 
-          <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={restaurant.is_active}
-                onChange={() => handleToggleActive(restaurant)}
-                className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
-              />
-              <span className="text-sm text-gray-700">
-                {restaurant.is_active ? 'Actif' : 'Inactif'}
-              </span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={restaurant.is_premium}
-                onChange={() => handleTogglePremium(restaurant)}
-                className="w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
-              />
-              <span className="text-sm text-gray-700">Premium</span>
-            </label>
-            <div className="md:hidden flex gap-2 w-full">
-              <button
-                onClick={() => handleViewDetails(restaurant)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                Détails
-              </button>
-              <button
-                onClick={() => handleEdit(restaurant)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg"
-              >
-                Modifier
-              </button>
+              {/* Boutons d'action */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleViewDetails(restaurant)}
+                  className="text-gray-600 hover:text-gray-900 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                  title="Voir les détails"
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleEdit(restaurant)}
+                  className="text-blue-600 hover:text-blue-900 p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                  title="Modifier"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(restaurant.id)}
+                  className="text-red-600 hover:text-red-900 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                  title="Supprimer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1249,14 +1231,14 @@ setTotalPages(calculatedTotalPages);
 
   const PendingRequestCard: React.FC<{ request: Restaurant }> = ({ request }) => (
     <div className="bg-white rounded-lg shadow p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-900">{request.name}</h3>
-          <p className="text-sm text-gray-500 mt-1">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900 truncate">{request.name}</h3>
+          <p className="text-sm text-gray-500 mt-1 line-clamp-2">
             {request.categories?.join(', ')}
           </p>
         </div>
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
           {request.created_at
             ? new Date(request.created_at).toLocaleDateString('fr-FR')
             : ''}
@@ -1267,14 +1249,14 @@ setTotalPages(calculatedTotalPages);
         <img
           src={request.image_url}
           alt={request.name}
-          className="w-full h-32 object-cover rounded-lg mb-3"
+          className="w-full h-32 sm:h-40 object-cover rounded-lg mb-3"
         />
       )}
 
       <div className="space-y-2 text-sm text-gray-600 mb-4">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4" />
-          <span>{request.address}</span>
+        <div className="flex items-start gap-2">
+          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+          <span className="break-words">{request.address || 'Adresse non renseignée'}</span>
         </div>
         {request.description && (
           <p className="text-sm text-gray-600 line-clamp-2">
@@ -1283,27 +1265,27 @@ setTotalPages(calculatedTotalPages);
         )}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
         <button
           onClick={() => handleViewDetails(request)}
-          className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"
+          className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2 text-sm"
         >
           <Eye className="w-4 h-4" />
-          Détails
+          <span className="whitespace-nowrap">Détails</span>
         </button>
         <button
           onClick={() => handleApprove(request.id)}
-          className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+          className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 text-sm"
         >
           <CheckCircle className="w-4 h-4" />
-          Accepter
+          <span className="whitespace-nowrap">Accepter</span>
         </button>
         <button
           onClick={() => handleReject(request.id)}
-          className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+          className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2 text-sm"
         >
           <XCircle className="w-4 h-4" />
-          Rejeter
+          <span className="whitespace-nowrap">Rejeter</span>
         </button>
       </div>
     </div>
@@ -1505,9 +1487,9 @@ setTotalPages(calculatedTotalPages);
           </div>
         ) : activeTab === 'all' ? (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="space-y-3">
               {filteredRestaurants.map((restaurant) => (
-                <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+                <RestaurantListItem key={restaurant.id} restaurant={restaurant} />
               ))}
             </div>
             {filteredRestaurants.length === 0 && (
@@ -1529,7 +1511,7 @@ setTotalPages(calculatedTotalPages);
             
             {/* Search bar for pending requests */}
             <div className="mb-6">
-              <div className="relative max-w-md">
+              <div className="relative w-full max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
@@ -2022,7 +2004,7 @@ setTotalPages(calculatedTotalPages);
                           is_premium: e.target.checked
                         })
                       }
-                      className="w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
+                      className="w-4 h-4 text-yellow-600 rounded focus:ring-2 focus:ring-yellow-500"
                     />
                     <span className="text-sm font-medium text-gray-700">
                       Compte Premium
@@ -2533,7 +2515,7 @@ setTotalPages(calculatedTotalPages);
                         type="checkbox"
                         checked={createForm.is_premium}
                         onChange={(e) => setCreateForm({...createForm, is_premium: e.target.checked})}
-                        className="w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
+                        className="w-4 h-4 text-yellow-600 rounded focus:ring-2 focus:ring-yellow-500"
                       />
                       <span className="text-sm font-medium text-gray-700">Compte Premium</span>
                     </label>

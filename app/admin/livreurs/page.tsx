@@ -20,7 +20,9 @@ import {
   Award,
   Plus,
   X,
-  Save
+  Save,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -71,6 +73,7 @@ interface CreateDriverForm {
   license_number: string;
   is_verified: boolean;
   is_active: boolean;
+  profile_image_url?: string;
 }
 
 interface EditDriverForm {
@@ -85,6 +88,7 @@ interface EditDriverForm {
   is_active: boolean;
   status: DriverStatus;
   notes: string;
+  profile_image_url?: string;
 }
 
 export default function DriverManagement() {
@@ -109,6 +113,16 @@ export default function DriverManagement() {
   const [createFormErrors, setCreateFormErrors] = useState<Record<string, string>>({});
   const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
+
+  // Image upload states
+  const [uploadingImage, setUploadingImage] = useState<boolean>(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [editUploadingImage, setEditUploadingImage] = useState<boolean>(false);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+
   // Create form state
   const [createForm, setCreateForm] = useState<CreateDriverForm>({
     email: '',
@@ -120,7 +134,8 @@ export default function DriverManagement() {
     vehicle_plate: '',
     license_number: '',
     is_verified: false,
-    is_active: true
+    is_active: true,
+    profile_image_url: ''
   });
 
   // Récupérer les livreurs depuis le backend
@@ -199,6 +214,17 @@ export default function DriverManagement() {
     return matchesSearch && matchesFilter;
   });
 
+  // Calculer la pagination
+  const totalPages = Math.ceil(filteredDrivers.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedDrivers = filteredDrivers.slice(startIndex, endIndex);
+
+  // Reset à la page 1 quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus]);
+
   const applyPendingSearchFilter = () => {
     let filtered = [...pendingDrivers];
     if (pendingSearchTerm.trim()) {
@@ -231,8 +257,10 @@ export default function DriverManagement() {
         is_verified: driver.is_verified,
         is_active: driver.is_active,
         status: driver.status,
-        notes: driver.notes ?? ''
+        notes: driver.notes ?? '',
+        profile_image_url: driver.profile_image_url ?? ''
       });
+      setEditImagePreview(driver.profile_image_url || null);
     }
 
     setModalType(type);
@@ -248,6 +276,8 @@ export default function DriverManagement() {
     setError('');
     setCreateFormErrors({});
     setEditFormErrors({});
+    setImagePreview(null);
+    setEditImagePreview(null);
     // Reset create form
     setCreateForm({
       email: '',
@@ -259,7 +289,8 @@ export default function DriverManagement() {
       vehicle_plate: '',
       license_number: '',
       is_verified: false,
-      is_active: true
+      is_active: true,
+      profile_image_url: ''
     });
   };
 
@@ -410,7 +441,8 @@ export default function DriverManagement() {
         is_verified: editFormData.is_verified ?? selectedDriver.is_verified,
         is_active: editFormData.is_active ?? selectedDriver.is_active,
         status: editFormData.status ?? selectedDriver.status,
-        notes: editFormData.notes ?? selectedDriver.notes ?? ''
+        notes: editFormData.notes ?? selectedDriver.notes ?? '',
+        profile_image_url: editFormData.profile_image_url ?? selectedDriver.profile_image_url ?? ''
       };
 
       const response = await fetch(`${API_URL}/driver/update/${selectedDriver.id}`, {
@@ -587,6 +619,111 @@ export default function DriverManagement() {
     }
   };
 
+  // Image upload functions
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Veuillez sélectionner une image valide');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("L'image ne doit pas dépasser 5 MB");
+      return;
+    }
+
+    setUploadingImage(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_URL}/api/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error("Échec de l'upload de l'image");
+      }
+
+      const data = await response.json();
+
+      setCreateForm((prev) => ({ ...prev, profile_image_url: data.url }));
+      setImagePreview(URL.createObjectURL(file));
+      setError('');
+    } catch (err: any) {
+      console.error('Error uploading image:', err);
+      setError(err?.message || "Erreur lors de l'upload de l'image");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleEditImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Veuillez sélectionner une image valide');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("L'image ne doit pas dépasser 5 MB");
+      return;
+    }
+
+    setEditUploadingImage(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_URL}/api/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error("Échec de l'upload de l'image");
+      }
+
+      const data = await response.json();
+
+      setEditFormData((prev) => ({ ...prev, profile_image_url: data.url }));
+      setEditImagePreview(URL.createObjectURL(file));
+      setError('');
+    } catch (err: any) {
+      console.error('Error uploading image:', err);
+      setError(err?.message || "Erreur lors de l'upload de l'image");
+    } finally {
+      setEditUploadingImage(false);
+    }
+  };
+
+  const removeImage = () => {
+    setCreateForm((prev) => ({ ...prev, profile_image_url: '' }));
+    setImagePreview(null);
+  };
+
+  const removeEditImage = () => {
+    setEditFormData((prev) => ({ ...prev, profile_image_url: '' }));
+    setEditImagePreview(null);
+  };
+
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('fr-FR', {
@@ -693,32 +830,55 @@ export default function DriverManagement() {
 
           {/* Barre de recherche et filtres - seulement pour l'onglet "all" */}
           {activeTab === 'all' && (
-            <div className="mt-6 flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Rechercher par nom, code, email ou téléphone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                />
+            <div className="mt-6 space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher par nom, code, email ou téléphone..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <select
+                  value={filterStatus}
+                  onChange={(e) =>
+                    setFilterStatus(e.target.value as typeof filterStatus)
+                  }
+                  className="w-full sm:w-60 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+                >
+                  <option value="all">Tous les statuts</option>
+                  <option value="available">Disponibles</option>
+                  <option value="busy">Occupés</option>
+                  <option value="offline">Hors ligne</option>
+                  <option value="suspended">Suspendus</option>
+                  <option value="verified">Vérifiés</option>
+                  <option value="unverified">Non vérifiés</option>
+                </select>
               </div>
-              <select
-                value={filterStatus}
-                onChange={(e) =>
-                  setFilterStatus(e.target.value as typeof filterStatus)
-                }
-                className="w-full sm:w-60 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
-              >
-                <option value="all">Tous les statuts</option>
-                <option value="available">Disponibles</option>
-                <option value="busy">Occupés</option>
-                <option value="offline">Hors ligne</option>
-                <option value="suspended">Suspendus</option>
-                <option value="verified">Vérifiés</option>
-                <option value="unverified">Non vérifiés</option>
-              </select>
+              
+              {/* Contrôle de pagination */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700">Afficher:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white text-sm"
+                  >
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                  <span className="text-sm text-gray-700">par page</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -760,7 +920,7 @@ export default function DriverManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredDrivers.map((driver) => (
+                  {paginatedDrivers.map((driver) => (
                     <tr key={driver.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -910,6 +1070,67 @@ export default function DriverManagement() {
                 </p>
               </div>
             )}
+
+            {/* Pagination */}
+            {filteredDrivers.length > 0 && (
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Affichage de <span className="font-medium">{startIndex + 1}</span> à{' '}
+                  <span className="font-medium">
+                    {Math.min(endIndex, filteredDrivers.length)}
+                  </span>{' '}
+                  sur <span className="font-medium">{filteredDrivers.length}</span> livreur
+                  {filteredDrivers.length > 1 ? 's' : ''}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Précédent</span>
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                    }
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+                  >
+                    <span className="hidden sm:inline">Suivant</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* Onglet Demandes en attente */
@@ -922,7 +1143,7 @@ export default function DriverManagement() {
             </p>
 
             <div className="mb-6">
-              <div className="relative max-w-md">
+              <div className="relative w-full max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
@@ -938,64 +1159,64 @@ export default function DriverManagement() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredPendingDrivers.map((driver) => (
                   <div key={driver.id} className="bg-white rounded-lg shadow p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">
                           {driver.first_name} {driver.last_name}
                         </h3>
-                        <p className="text-sm text-gray-500 font-mono mt-1">
+                        <p className="text-sm text-gray-500 font-mono mt-1 truncate">
                           {driver.driver_code}
                         </p>
-                        <p className="text-sm text-gray-600 mt-1 capitalize">
+                        <p className="text-sm text-gray-600 mt-1 capitalize line-clamp-1">
                           {driver.vehicle_type} - {driver.vehicle_plate || 'N/A'}
                         </p>
                       </div>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
                         {formatDate(driver.created_at)}
                       </span>
                     </div>
 
                     <div className="space-y-2 text-sm text-gray-600 mb-4">
                       <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        <span>{driver.phone}</span>
+                        <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span className="break-all">{driver.phone}</span>
                       </div>
                       {driver.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4" />
-                          <span className="text-xs">{driver.email}</span>
+                        <div className="flex items-start gap-2">
+                          <Mail className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                          <span className="text-xs break-all">{driver.email}</span>
                         </div>
                       )}
                       {driver.license_number && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-gray-500 truncate">
                           Permis: {driver.license_number}
                         </div>
                       )}
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <button
                         onClick={() => handleAction(driver, 'view')}
-                        className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2"
+                        className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2 text-sm"
                       >
                         <Eye className="w-4 h-4" />
-                        Détails
+                        <span className="whitespace-nowrap">Détails</span>
                       </button>
                       <button
                         onClick={() => handleApproveDriver(driver)}
                         disabled={saveLoading}
-                        className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
                       >
                         <UserCheck className="w-4 h-4" />
-                        Accepter
+                        <span className="whitespace-nowrap">Accepter</span>
                       </button>
                       <button
                         onClick={() => handleRejectDriver(driver)}
                         disabled={saveLoading}
-                        className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
                       >
                         <UserX className="w-4 h-4" />
-                        Rejeter
+                        <span className="whitespace-nowrap">Rejeter</span>
                       </button>
                     </div>
                   </div>
@@ -1158,6 +1379,94 @@ export default function DriverManagement() {
                   </div>
                 </div>
 
+                {/* Photo de profil */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-4">Photo de profil</h3>
+                  <div className="space-y-4">
+                    {(imagePreview || createForm.profile_image_url) && (
+                      <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200">
+                        <img
+                          src={imagePreview || createForm.profile_image_url}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={removeImage}
+                          className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <label className="flex-1 cursor-pointer">
+                        <div className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                          {uploadingImage ? (
+                            <>
+                              <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-blue-600"></div>
+                              <span className="text-sm text-gray-600">
+                                Upload en cours...
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <svg
+                                className="w-5 h-5 text-gray-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M12 4v16m8-8H4"
+                                />
+                              </svg>
+                              <span className="text-sm text-gray-600">
+                                {imagePreview || createForm.profile_image_url
+                                  ? 'Changer l\'image'
+                                  : 'Télécharger une image'}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                          disabled={uploadingImage}
+                        />
+                      </label>
+
+                      {/* Manual URL Input */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = prompt("Entrez l'URL de l'image:");
+                          if (url) {
+                            setCreateForm({...createForm, profile_image_url: url});
+                            setImagePreview(null);
+                          }
+                        }}
+                        className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        title="Entrer une URL manuellement"
+                      >
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      Formats acceptés: JPG, PNG, GIF. Taille max: 5 MB
+                    </p>
+                  </div>
+                </div>
+
                 {/* Informations du véhicule */}
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h3 className="text-lg font-semibold mb-4">Informations du véhicule</h3>
@@ -1245,7 +1554,7 @@ export default function DriverManagement() {
               </button>
               <button
                 onClick={handleCreateDriver}
-                disabled={saveLoading}
+                disabled={saveLoading || uploadingImage}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {saveLoading ? (
@@ -1338,10 +1647,18 @@ export default function DriverManagement() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Photo de profil / Icon */}
+                  {/* Photo de profil */}
                   <div className="flex items-center gap-4">
-                    <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Car className="w-10 h-10 text-blue-600" />
+                    <div className="relative">
+                      <img
+                        src={
+                          (modalType === 'edit' && (editImagePreview || editFormData.profile_image_url)) ||
+                          selectedDriver.profile_image_url ||
+                          `https://ui-avatars.com/api/?name=${selectedDriver.first_name}+${selectedDriver.last_name}&background=16a34a&color=fff`
+                        }
+                        alt={`${selectedDriver.first_name} ${selectedDriver.last_name}`}
+                        className="w-20 h-20 rounded-full object-cover border-2 border-gray-200"
+                      />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">
@@ -1368,6 +1685,96 @@ export default function DriverManagement() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Upload d'image - seulement en mode edit */}
+                  {modalType === 'edit' && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-4">Modifier la photo de profil</h3>
+                      <div className="space-y-4">
+                        {(editImagePreview || editFormData.profile_image_url || selectedDriver.profile_image_url) && (
+                          <div className="relative w-full h-48 rounded-lg overflow-hidden bg-gray-100 border-2 border-gray-200">
+                            <img
+                              src={editImagePreview || editFormData.profile_image_url || selectedDriver.profile_image_url || ''}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={removeEditImage}
+                              className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex gap-3">
+                          <label className="flex-1 cursor-pointer">
+                            <div className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                              {editUploadingImage ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-blue-600"></div>
+                                  <span className="text-sm text-gray-600">
+                                    Upload en cours...
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg
+                                    className="w-5 h-5 text-gray-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M12 4v16m8-8H4"
+                                    />
+                                  </svg>
+                                  <span className="text-sm text-gray-600">
+                                    {editImagePreview || editFormData.profile_image_url
+                                      ? 'Changer l\'image'
+                                      : 'Télécharger une image'}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleEditImageUpload}
+                              className="hidden"
+                              disabled={editUploadingImage}
+                            />
+                          </label>
+
+                          {/* Manual URL Input */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const url = prompt("Entrez l'URL de l'image:");
+                              if (url) {
+                                setEditFormData({...editFormData, profile_image_url: url});
+                                setEditImagePreview(null);
+                              }
+                            }}
+                            className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            title="Entrer une URL manuellement"
+                          >
+                            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        <p className="text-xs text-gray-500">
+                          Formats acceptés: JPG, PNG, GIF. Taille max: 5 MB
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Informations */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1669,7 +2076,7 @@ export default function DriverManagement() {
                 {modalType === 'edit' && (
                   <button
                     onClick={handleSave}
-                    disabled={saveLoading}
+                    disabled={saveLoading || editUploadingImage}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
                     {saveLoading ? (

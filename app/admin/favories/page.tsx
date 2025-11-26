@@ -399,7 +399,7 @@ export default function ClientFavorites() {
           </div>
         ) : activeTab === 'restaurants' ? (
           // Liste des restaurants favoris
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredRestaurants.map((fav, idx) => {
               // Use favorite_uuid as primary key, fallback to unique combination
               const uniqueKey = fav.favorite_uuid || `${fav.restaurant?.id}-${fav.client?.id}-${idx}`;
@@ -409,52 +409,52 @@ export default function ClientFavorites() {
                   key={uniqueKey}
                 className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden"
               >
-                <div className="relative h-48">
+                <div className="relative h-36">
                   <img
                     src={fav.restaurant.image_url || 'https://via.placeholder.com/400x300?text=Restaurant'}
                     alt={fav.restaurant.name}
                     className="w-full h-full object-cover"
                   />
                   {fav.restaurant.is_premium && (
-                    <span className="absolute top-2 left-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded">
+                    <span className="absolute top-2 left-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded">
                       PREMIUM
                     </span>
                   )}
                   
                 </div>
                 
-                <div className="p-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                <div className="p-3">
+                  <h3 className="text-base font-semibold text-gray-900 mb-1 line-clamp-1">
                     {fav.restaurant.name}
                   </h3>
                   
                   {fav.client && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                    <div className="flex items-center gap-2 text-xs text-gray-600 mb-1.5">
                       <span className="font-medium">Client:</span>
-                      <span>{fav.client.first_name} {fav.client.last_name}</span>
+                      <span className="truncate">{fav.client.first_name} {fav.client.last_name}</span>
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-1 mb-2">
-                    <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                    <span className="text-sm font-medium text-gray-700">
+                  <div className="flex items-center gap-1 mb-1.5">
+                    <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                    <span className="text-xs font-medium text-gray-700">
                       {fav.restaurant.rating || 'N/A'}
                     </span>
                   </div>
                   
-                  <div className="flex items-start gap-2 text-sm text-gray-500 mb-3">
-                    <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-1.5 text-xs text-gray-500 mb-2">
+                    <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                     <span className="line-clamp-2">{fav.restaurant.address}</span>
                   </div>
                   
                   {fav.tags && fav.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
+                    <div className="flex flex-wrap gap-1 mb-2">
                       {fav.tags.map((tag, tagIdx) => (
                         <span
                           key={`tag-${uniqueKey}-${tag}-${tagIdx}`}
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full"
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full"
                         >
-                          <Tag className="w-3 h-3" />
+                          <Tag className="w-2.5 h-2.5" />
                           {tag}
                         </span>
                       ))}
@@ -462,14 +462,14 @@ export default function ClientFavorites() {
                   )}
                   
                   {fav.notes && (
-                    <div className="flex items-start gap-2 text-sm text-gray-600 bg-gray-50 p-2 rounded mb-3">
-                      <StickyNote className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-1.5 text-xs text-gray-600 bg-gray-50 p-1.5 rounded mb-2">
+                      <StickyNote className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                       <p className="line-clamp-2">{fav.notes}</p>
                     </div>
                   )}
                   
-                  <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
-                    <span>Ajouté le {fav.added_at}</span>
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span className="truncate">Ajouté le {fav.added_at}</span>
                   </div>
                   
                  
@@ -492,7 +492,7 @@ export default function ClientFavorites() {
           </div>
         ) : (
           // Liste des plats favoris
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredMeals.map((fav, idx) => {
               // Use favorite_uuid as primary key, fallback to unique combination
               const uniqueKey = fav.favorite_uuid || `${fav.meal?.id}-${fav.client?.id}-${idx}`;
@@ -502,7 +502,7 @@ export default function ClientFavorites() {
                   key={uniqueKey}
                 className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden"
               >
-                <div className="relative h-48">
+                <div className="relative h-36">
                   <img
                     src={fav.meal.photo_url || 'https://via.placeholder.com/400x300?text=Meal'}
                     alt={fav.meal.nom}
@@ -511,49 +511,49 @@ export default function ClientFavorites() {
                   
                 </div>
                 
-                <div className="p-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                <div className="p-3">
+                  <h3 className="text-base font-semibold text-gray-900 mb-1 line-clamp-1">
                     {fav.meal.nom}
                   </h3>
                   
                   {fav.client && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                    <div className="flex items-center gap-2 text-xs text-gray-600 mb-1.5">
                       <span className="font-medium">Client:</span>
-                      <span>{fav.client.first_name} {fav.client.last_name}</span>
+                      <span className="truncate">{fav.client.first_name} {fav.client.last_name}</span>
                     </div>
                   )}
                   
-                  <p className="text-2xl font-bold text-red-600 mb-2">
+                  <p className="text-xl font-bold text-red-600 mb-1.5">
                     {fav.meal.prix} DA
                   </p>
                   
                   {fav.meal.description && (
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                    <p className="text-xs text-gray-600 mb-2 line-clamp-2">
                       {fav.meal.description}
                     </p>
                   )}
                   
-                  <div className="flex items-center gap-2 text-sm text-gray-500 mb-3 pb-3 border-b">
-                    <Store className="w-4 h-4" />
-                    <span className="font-medium">{fav.meal?.restaurant?.name ?? "Restaurant "}</span>
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2 pb-2 border-b">
+                    <Store className="w-3.5 h-3.5" />
+                    <span className="font-medium truncate">{fav.meal?.restaurant?.name ?? "Restaurant "}</span>
                   </div>
                   
                   {fav.customizations && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded p-2 mb-3">
-                      <p className="text-xs font-medium text-yellow-800 mb-1">Personnalisations:</p>
-                      <p className="text-sm text-yellow-700">{fav.customizations}</p>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded p-1.5 mb-2">
+                      <p className="text-xs font-medium text-yellow-800 mb-0.5">Personnalisations:</p>
+                      <p className="text-xs text-yellow-700 line-clamp-2">{fav.customizations}</p>
                     </div>
                   )}
                   
                   {fav.notes && (
-                    <div className="flex items-start gap-2 text-sm text-gray-600 bg-gray-50 p-2 rounded mb-3">
-                      <StickyNote className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-1.5 text-xs text-gray-600 bg-gray-50 p-1.5 rounded mb-2">
+                      <StickyNote className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                       <p className="line-clamp-2">{fav.notes}</p>
                     </div>
                   )}
                   
-                  <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
-                    <span>Ajouté le {fav.createdAt}</span>
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span className="truncate">Ajouté le {fav.createdAt}</span>
                   </div>
                   
                   

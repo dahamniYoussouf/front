@@ -91,12 +91,14 @@ export default function DriverManagement() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('all');
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [pendingDrivers, setPendingDrivers] = useState<Driver[]>([]);
+  const [filteredPendingDrivers, setFilteredPendingDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<
     'all' | 'available' | 'busy' | 'offline' | 'suspended' | 'verified' | 'unverified'
   >('all');
+  const [pendingSearchTerm, setPendingSearchTerm] = useState<string>('');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>('');
@@ -125,6 +127,10 @@ export default function DriverManagement() {
   useEffect(() => {
     fetchDrivers();
   }, []);
+
+  useEffect(() => {
+    applyPendingSearchFilter();
+  }, [pendingDrivers, pendingSearchTerm]);
 
   const fetchDrivers = async () => {
     try {
@@ -158,6 +164,7 @@ export default function DriverManagement() {
         // Séparer les livreurs non vérifiés et non suspendus
         const unverified = allDrivers.filter(d => !d.is_verified && d.status !== 'suspended');
         setPendingDrivers(unverified);
+        setFilteredPendingDrivers(unverified);
       } else {
         throw new Error('Format de données invalide');
       }
@@ -191,6 +198,22 @@ export default function DriverManagement() {
 
     return matchesSearch && matchesFilter;
   });
+
+  const applyPendingSearchFilter = () => {
+    let filtered = [...pendingDrivers];
+    if (pendingSearchTerm.trim()) {
+      const query = pendingSearchTerm.toLowerCase();
+      filtered = filtered.filter((driver) =>
+        driver.first_name?.toLowerCase().includes(query) ||
+        driver.last_name?.toLowerCase().includes(query) ||
+        driver.email?.toLowerCase().includes(query) ||
+        driver.phone?.toLowerCase().includes(query) ||
+        driver.driver_code?.toLowerCase().includes(query) ||
+        driver.license_number?.toLowerCase().includes(query)
+      );
+    }
+    setFilteredPendingDrivers(filtered);
+  };
 
   // Gérer les actions
   const handleAction = (driver: Driver, type: ModalType) => {
@@ -894,12 +917,26 @@ export default function DriverManagement() {
             <h2 className="text-lg font-semibold text-gray-900 mb-2">
               Demandes de livreurs en attente
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-4">
               Consultez et gérez les demandes d'inscription des nouveaux livreurs.
             </p>
-            {pendingDrivers.length > 0 ? (
+
+            <div className="mb-6">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom, code, email ou téléphone..."
+                  value={pendingSearchTerm}
+                  onChange={(e) => setPendingSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+
+            {filteredPendingDrivers.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pendingDrivers.map((driver) => (
+                {filteredPendingDrivers.map((driver) => (
                   <div key={driver.id} className="bg-white rounded-lg shadow p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
@@ -967,7 +1004,11 @@ export default function DriverManagement() {
             ) : (
               <div className="text-center py-12 bg-white rounded-lg">
                 <UserCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                <p className="text-gray-500">Aucune demande en attente</p>
+                <p className="text-gray-500">
+                  {pendingDrivers.length === 0
+                    ? 'Aucune demande en attente'
+                    : 'Aucune demande trouvée pour cette recherche'}
+                </p>
               </div>
             )}
           </div>

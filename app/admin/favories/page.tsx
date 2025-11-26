@@ -401,15 +401,12 @@ export default function ClientFavorites() {
           // Liste des restaurants favoris
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredRestaurants.map((fav, idx) => {
-              const baseRestaurantKey =
-                fav.favorite_uuid ||
-                fav.restaurant?.id ||
-                fav.client?.id ||
-                `restaurant-${idx}`;
+              // Use favorite_uuid as primary key, fallback to unique combination
+              const uniqueKey = fav.favorite_uuid || `${fav.restaurant?.id}-${fav.client?.id}-${idx}`;
 
               return (
                 <div
-                  key={`restaurant-card-${baseRestaurantKey}`}
+                  key={uniqueKey}
                 className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden"
               >
                 <div className="relative h-48">
@@ -454,7 +451,7 @@ export default function ClientFavorites() {
                     <div className="flex flex-wrap gap-1 mb-3">
                       {fav.tags.map((tag, tagIdx) => (
                         <span
-                          key={`tag-${baseRestaurantKey}-${tag}-${tagIdx}`}
+                          key={`tag-${uniqueKey}-${tag}-${tagIdx}`}
                           className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full"
                         >
                           <Tag className="w-3 h-3" />
@@ -497,15 +494,12 @@ export default function ClientFavorites() {
           // Liste des plats favoris
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredMeals.map((fav, idx) => {
-              const baseMealKey =
-                fav.favorite_uuid ||
-                fav.meal?.id ||
-                fav.client?.id ||
-                `meal-${idx}`;
+              // Use favorite_uuid as primary key, fallback to unique combination
+              const uniqueKey = fav.favorite_uuid || `${fav.meal?.id}-${fav.client?.id}-${idx}`;
 
               return (
                 <div
-                  key={`meal-card-${baseMealKey}`}
+                  key={uniqueKey}
                 className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden"
               >
                 <div className="relative h-48">

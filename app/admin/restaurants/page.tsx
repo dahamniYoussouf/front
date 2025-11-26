@@ -533,40 +533,40 @@ setTotalPages(calculatedTotalPages);
   };
 
   // Validation functions
-  const validateEmail = (email: string): string => {
-    if (!email.trim()) return 'L\'email est obligatoire';
+  const validateEmail = (email: string | undefined): string => {
+    if (!email || !email.trim()) return 'L\'email est obligatoire';
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) return 'Format d\'email invalide';
     return '';
   };
 
-  const validatePassword = (password: string): string => {
+  const validatePassword = (password: string | undefined): string => {
     if (!password) return 'Le mot de passe est obligatoire';
     if (password.length < 6) return 'Le mot de passe doit contenir au moins 6 caractères';
     return '';
   };
 
-  const validateName = (name: string): string => {
-    if (!name.trim()) return 'Le nom est obligatoire';
+  const validateName = (name: string | undefined): string => {
+    if (!name || !name.trim()) return 'Le nom est obligatoire';
     if (name.trim().length < 2) return 'Le nom doit contenir au moins 2 caractères';
     return '';
   };
 
-  const validateAddress = (address: string): string => {
-    if (!address.trim()) return 'L\'adresse est obligatoire';
+  const validateAddress = (address: string | undefined): string => {
+    if (!address || !address.trim()) return 'L\'adresse est obligatoire';
     if (address.trim().length < 5) return 'L\'adresse doit contenir au moins 5 caractères';
     return '';
   };
 
-  const validatePhone = (phone: string): string => {
-    if (!phone.trim()) return 'Le téléphone est obligatoire';
+  const validatePhone = (phone: string | undefined): string => {
+    if (!phone || !phone.trim()) return 'Le téléphone est obligatoire';
     const phoneRegex = /^[\+]?[0-9\s\-\(\)]{8,}$/;
     if (!phoneRegex.test(phone.trim())) return 'Format de téléphone invalide';
     return '';
   };
 
-  const validateCoordinate = (coord: string, type: 'latitude' | 'longitude'): string => {
-    if (!coord.trim()) return `${type === 'latitude' ? 'La latitude' : 'La longitude'} est obligatoire`;
+  const validateCoordinate = (coord: string | undefined, type: 'latitude' | 'longitude'): string => {
+    if (!coord || !coord.trim()) return `${type === 'latitude' ? 'La latitude' : 'La longitude'} est obligatoire`;
     const num = parseFloat(coord);
     if (isNaN(num)) return `${type === 'latitude' ? 'La latitude' : 'La longitude'} doit être un nombre`;
     if (type === 'latitude' && (num < -90 || num > 90)) return 'La latitude doit être entre -90 et 90';
@@ -601,22 +601,22 @@ setTotalPages(calculatedTotalPages);
   const validateEditForm = (): boolean => {
     const errors: Record<string, string> = {};
 
-    if (editForm.email !== undefined && editForm.email !== '') {
+    if (typeof editForm.email === 'string' && editForm.email.trim()) {
       errors.email = validateEmail(editForm.email);
     }
-    if (editForm.name) {
+    if (typeof editForm.name === 'string' && editForm.name.trim()) {
       errors.name = validateName(editForm.name);
     }
-    if (editForm.address) {
+    if (typeof editForm.address === 'string' && editForm.address.trim()) {
       errors.address = validateAddress(editForm.address);
     }
-    if (editForm.phone_number) {
+    if (typeof editForm.phone_number === 'string' && editForm.phone_number.trim()) {
       errors.phone_number = validatePhone(editForm.phone_number);
     }
-    if (editForm.lat) {
+    if (typeof editForm.lat === 'string' && editForm.lat.trim()) {
       errors.lat = validateCoordinate(editForm.lat, 'latitude');
     }
-    if (editForm.lng) {
+    if (typeof editForm.lng === 'string' && editForm.lng.trim()) {
       errors.lng = validateCoordinate(editForm.lng, 'longitude');
     }
 
@@ -638,6 +638,27 @@ setTotalPages(calculatedTotalPages);
       setCreateFormErrors(prev => {
         const newErrors = { ...prev };
         delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleCategoryToggle = (value: CategoryValue, checked: boolean) => {
+    setCreateForm(prev => {
+      const exists = prev.categories.includes(value);
+      let newCategories = prev.categories;
+      if (checked && !exists) {
+        newCategories = [...prev.categories, value];
+      } else if (!checked && exists) {
+        newCategories = prev.categories.filter((cat) => cat !== value);
+      }
+      return { ...prev, categories: newCategories };
+    });
+
+    if (checked && createFormErrors.categories) {
+      setCreateFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.categories;
         return newErrors;
       });
     }
@@ -2127,16 +2148,18 @@ setTotalPages(calculatedTotalPages);
                       <input
                         type="email"
                         value={createForm.email}
-                        onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
-                            email: e.target.value
-                          })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        onChange={(e) => handleCreateFormChange('email', e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                          createFormErrors.email 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-green-500'
+                        }`}
                         placeholder="restaurant@example.com"
                         required
                       />
+                      {createFormErrors.email && (
+                        <p className="text-red-500 text-xs mt-1">{createFormErrors.email}</p>
+                      )}
                     </div>
 
                     <div>
@@ -2146,16 +2169,20 @@ setTotalPages(calculatedTotalPages);
                       <input
                         type="password"
                         value={createForm.password}
-                        onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
-                            password: e.target.value
-                          })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        onChange={(e) => handleCreateFormChange('password', e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                          createFormErrors.password 
+                            ? 'border-red-300 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-green-500'
+                        }`}
                         placeholder="••••••••"
                         required
                       />
+                      {createFormErrors.password ? (
+                        <p className="text-red-500 text-xs mt-1">{createFormErrors.password}</p>
+                      ) : (
+                        <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
+                      )}
                     </div>
                     
                     <div className="md:col-span-2">
@@ -2166,16 +2193,18 @@ setTotalPages(calculatedTotalPages);
                     <input
                       type="tel"
                       value={createForm.phone_number || ''}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          phone_number: e.target.value
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      onChange={(e) => handleCreateFormChange('phone_number', e.target.value)}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                        createFormErrors.phone_number
+                          ? 'border-red-300 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-green-500'
+                      }`}
                       placeholder="+213 555 123 456"
                       required
                     />
+                    {createFormErrors.phone_number && (
+                      <p className="text-red-500 text-xs mt-1">{createFormErrors.phone_number}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2191,16 +2220,21 @@ setTotalPages(calculatedTotalPages);
                         Nom du restaurant *{' '}
                         <span className="text-red-500">●</span>
                       </label>
-                      <input
-                        type="text"
-                        value={createForm.name}
-                        onChange={(e) =>
-                          setCreateForm({ ...createForm, name: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="Nom du restaurant"
-                        required
-                      />
+                    <input
+                      type="text"
+                      value={createForm.name}
+                      onChange={(e) => handleCreateFormChange('name', e.target.value)}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                        createFormErrors.name
+                          ? 'border-red-300 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-green-500'
+                      }`}
+                      placeholder="Nom du restaurant"
+                      required
+                    />
+                    {createFormErrors.name && (
+                      <p className="text-red-500 text-xs mt-1">{createFormErrors.name}</p>
+                    )}
                     </div>
 
                     <div>
@@ -2274,17 +2308,9 @@ setTotalPages(calculatedTotalPages);
                               <input
                                 type="checkbox"
                                 checked={isSelected}
-                                onChange={(e) => {
-                                  const newCategories = e.target.checked
-                                    ? [...createForm.categories, cat.value]
-                                    : createForm.categories.filter(
-                                        (c) => c !== cat.value
-                                      );
-                                  setCreateForm({
-                                    ...createForm,
-                                    categories: newCategories
-                                  });
-                                }}
+                                onChange={(e) =>
+                                  handleCategoryToggle(cat.value, e.target.checked)
+                                }
                                 className="absolute top-2 right-2 w-5 h-5 text-green-600 rounded-full focus:ring-2 focus:ring-green-500"
                               />
                               <span className="text-4xl mb-2">
@@ -2425,14 +2451,21 @@ setTotalPages(calculatedTotalPages);
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Adresse * <span className="text-red-500">●</span>
                       </label>
-                      <input
-                        type="text"
-                        value={createForm.address}
-                        onChange={(e) => setCreateForm({...createForm, address: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="123 Rue Example, Ville"
-                        required
-                      />
+                    <input
+                      type="text"
+                      value={createForm.address}
+                      onChange={(e) => handleCreateFormChange('address', e.target.value)}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                        createFormErrors.address
+                          ? 'border-red-300 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-green-500'
+                      }`}
+                      placeholder="123 Rue Example, Ville"
+                      required
+                    />
+                    {createFormErrors.address && (
+                      <p className="text-red-500 text-xs mt-1">{createFormErrors.address}</p>
+                    )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -2443,11 +2476,18 @@ setTotalPages(calculatedTotalPages);
                         <input
                           type="text"
                           value={createForm.lat}
-                          onChange={(e) => setCreateForm({...createForm, lat: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          onChange={(e) => handleCreateFormChange('lat', e.target.value)}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                            createFormErrors.lat
+                              ? 'border-red-300 focus:ring-red-500'
+                              : 'border-gray-300 focus:ring-green-500'
+                          }`}
                           placeholder="36.7309715"
                           required
                         />
+                        {createFormErrors.lat && (
+                          <p className="text-red-500 text-xs mt-1">{createFormErrors.lat}</p>
+                        )}
                       </div>
 
                       <div>
@@ -2457,11 +2497,18 @@ setTotalPages(calculatedTotalPages);
                         <input
                           type="text"
                           value={createForm.lng}
-                          onChange={(e) => setCreateForm({...createForm, lng: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          onChange={(e) => handleCreateFormChange('lng', e.target.value)}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent ${
+                            createFormErrors.lng
+                              ? 'border-red-300 focus:ring-red-500'
+                              : 'border-gray-300 focus:ring-green-500'
+                          }`}
                           placeholder="3.1670642"
                           required
                         />
+                        {createFormErrors.lng && (
+                          <p className="text-red-500 text-xs mt-1">{createFormErrors.lng}</p>
+                        )}
                       </div>
                     </div>
                   </div>

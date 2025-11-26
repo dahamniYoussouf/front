@@ -11,7 +11,9 @@ import {
   Mail,
   Phone,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -50,6 +52,12 @@ export default function ClientManagement() {
   const [modalType, setModalType] = useState<ModalType>(''); // 'view', 'edit', 'delete'
   const [editFormData, setEditFormData] = useState<Partial<Client>>({});
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   // Récupérer les clients depuis le backend
   useEffect(() => {
@@ -113,6 +121,36 @@ export default function ClientManagement() {
 
     return matchesSearch && matchesFilter;
   });
+
+  useEffect(() => {
+    const newTotalCount = filteredClients.length;
+    setTotalCount(newTotalCount);
+    const newTotalPages = Math.max(1, Math.ceil(newTotalCount / pageSize));
+    setTotalPages(newTotalPages);
+    if (currentPage > newTotalPages) {
+      setCurrentPage(newTotalPages);
+    }
+    if (currentPage < 1) {
+      setCurrentPage(1);
+    }
+  }, [filteredClients.length, pageSize, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus]);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedClients = filteredClients.slice(startIndex, startIndex + pageSize);
+  const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
+  const showingTo = startIndex + paginatedClients.length;
+
+  const handlePageChange = (direction: 'prev' | 'next') => {
+    if (direction === 'prev' && currentPage > 1) {
+      setCurrentPage((prev) => prev - 1);
+    } else if (direction === 'next' && currentPage < totalPages) {
+      setCurrentPage((prev) => prev + 1);
+    }
+  };
 
   // Gérer les actions
   const handleAction = (client: Client, type: ModalType) => {
@@ -270,9 +308,8 @@ export default function ClientManagement() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Gestion des Clients</h1>
               <p className="mt-1 text-sm text-gray-500">
-                {filteredClients.length} client
-                {filteredClients.length > 1 ? 's' : ''} trouvé
-                {filteredClients.length > 1 ? 's' : ''}
+                {totalCount} client{totalCount > 1 ? 's' : ''} trouvé
+                {totalCount > 1 ? 's' : ''}
               </p>
             </div>
             <button
@@ -296,7 +333,7 @@ export default function ClientManagement() {
           )}
 
           {/* Barre de recherche et filtres */}
-          <div className="mt-6 flex flex-col sm:flex-row gap-4">
+          <div className="mt-6 flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -320,6 +357,23 @@ export default function ClientManagement() {
               <option value="verified">Vérifiés</option>
               <option value="unverified">Non vérifiés</option>
             </select>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">Par page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+              >
+                {[10, 20, 50].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -360,7 +414,7 @@ export default function ClientManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredClients.map((client) => (
+                  {paginatedClients.map((client) => (
                     <tr key={client.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -455,7 +509,7 @@ export default function ClientManagement() {
               </table>
             </div>
 
-            {filteredClients.length === 0 && (
+            {totalCount === 0 && (
               <div className="text-center py-12">
                 <UserX className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-sm font-medium text-gray-900">
@@ -464,6 +518,36 @@ export default function ClientManagement() {
                 <p className="mt-1 text-sm text-gray-500">
                   Essayez de modifier vos critères de recherche
                 </p>
+              </div>
+            )}
+
+            {totalCount > 0 && (
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between px-6 py-4 border-t border-gray-100">
+                <p className="text-sm text-gray-500">
+                  Affichage {showingFrom}–{showingTo} sur {totalCount} client
+                  {totalCount > 1 ? 's' : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange('prev')}
+                    disabled={currentPage === 1}
+                    className="inline-flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 disabled:opacity-50 hover:bg-gray-50"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Précédent
+                  </button>
+                  <span className="text-sm text-gray-500">
+                    Page {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => handlePageChange('next')}
+                    disabled={currentPage === totalPages}
+                    className="inline-flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 disabled:opacity-50 hover:bg-gray-50"
+                  >
+                    Suivant
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             )}
           </div>

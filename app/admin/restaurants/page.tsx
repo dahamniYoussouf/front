@@ -354,6 +354,7 @@ export default function AdminRestaurantManagement() {
   const [filteredPendingRequests, setFilteredPendingRequests] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
   const [pendingSearchQuery, setPendingSearchQuery] = useState<string>('');
 
   const [filterStatus, setFilterStatus] = useState<RestaurantStatus | 'all'>('all');
@@ -432,12 +433,21 @@ export default function AdminRestaurantManagement() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pageSize, activeTab, filterCategory, filterAddress, filterStatus, filterActive, filterPremium]);
+  }, [currentPage, pageSize, activeTab, filterCategory, filterAddress, filterStatus, filterActive, filterPremium, debouncedSearchQuery]);
+
+  // Debounce search query (2 seconds)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Apply search filter
   useEffect(() => {
     applySearchFilter();
-  }, [restaurants, searchQuery]);
+  }, [restaurants, debouncedSearchQuery]);
 
   // Apply search filter for pending requests
   useEffect(() => {
@@ -450,14 +460,16 @@ export default function AdminRestaurantManagement() {
     try {
       if (activeTab === 'all') {
         const apiFilters: RestaurantFilters = {
-          q: searchQuery.trim() || undefined,
+          q: debouncedSearchQuery.trim() || undefined,
           address: filterAddress.trim() || undefined,
           page: currentPage,
           pageSize: pageSize
         };
 
         if (filterCategory !== 'all') apiFilters.categories = [filterCategory];
+        // Include pending restaurants in "all" tab by default
         if (filterStatus !== 'all') apiFilters.status = filterStatus;
+        // If status is 'all', don't filter by status (include all including pending)
         if (filterActive === 'active') apiFilters.is_active = 'true';
         else if (filterActive === 'inactive') apiFilters.is_active = 'false';
         if (filterPremium === 'premium') apiFilters.is_premium = 'true';
@@ -465,7 +477,22 @@ export default function AdminRestaurantManagement() {
 
         const result = await api.getRestaurants(apiFilters);
 
-        setRestaurants(result.data);
+        // Also load pending requests to include them in "all restaurants"
+        let allRestaurants = [...result.data];
+        if (filterStatus === 'all' || !filterStatus) {
+          try {
+            const pendingResult = await api.getPendingRequests();
+            // Merge pending restaurants that are not already in the list
+            const existingIds = new Set(result.data.map(r => r.id));
+            const newPending = pendingResult.data.filter(r => !existingIds.has(r.id));
+            allRestaurants = [...result.data, ...newPending];
+          } catch (pendingError) {
+            // If pending requests fail, just use regular restaurants
+            console.warn('Could not load pending requests:', pendingError);
+          }
+        }
+
+        setRestaurants(allRestaurants);
         const calculatedTotalPages = result.count > 0 
   ? Math.ceil(result.count / pageSize) 
   : 1;
@@ -487,11 +514,13 @@ setTotalPages(calculatedTotalPages);
 
   const applySearchFilter = () => {
     let filtered = [...restaurants];
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase();
       filtered = filtered.filter((r) =>
         r.name?.toLowerCase().includes(query) ||
-        r.address?.toLowerCase().includes(query)
+        r.address?.toLowerCase().includes(query) ||
+        r.email?.toLowerCase().includes(query) ||
+        r.phone_number?.toLowerCase().includes(query)
       );
     }
     setFilteredRestaurants(filtered);
@@ -1090,7 +1119,7 @@ setTotalPages(calculatedTotalPages);
 
   const RestaurantListItem: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => (
     <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-4">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         {/* Image */}
         <div className="relative flex-shrink-0">
           <img
@@ -1106,16 +1135,16 @@ setTotalPages(calculatedTotalPages);
         </div>
 
         {/* Info principale */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0 w-full">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
                 <h3 className="font-semibold text-gray-900 truncate text-lg">
                   {restaurant.name}
                 </h3>
                 <StatusBadge status={restaurant.status} />
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 gap-2 text-sm text-gray-600 mb-2">
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                   <span className="font-medium">
@@ -1152,9 +1181,9 @@ setTotalPages(calculatedTotalPages);
             </div>
 
             {/* Toggles et actions */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
               {/* Toggles */}
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-2">
                   <div className="bg-green-100 p-1.5 rounded-lg">
                     <CheckCircle className={`w-4 h-4 ${restaurant.is_active ? 'text-green-600' : 'text-gray-400'}`} />
@@ -1199,7 +1228,7 @@ setTotalPages(calculatedTotalPages);
               </div>
 
               {/* Boutons d'action */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => handleViewDetails(restaurant)}
                   className="text-gray-600 hover:text-gray-900 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
@@ -1618,6 +1647,35 @@ setTotalPages(calculatedTotalPages);
                   {selectedRestaurant.phone_number || 'Non renseigné'}
                 </p>
               </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Email
+                </label>
+                <p className="text-gray-900 mt-1">
+                  {selectedRestaurant.email || 'Non renseigné'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Latitude
+                  </label>
+                  <p className="text-gray-900 mt-1">
+                    {selectedRestaurant.lat || 'Non renseignée'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Longitude
+                  </label>
+                  <p className="text-gray-900 mt-1">
+                    {selectedRestaurant.lng || 'Non renseignée'}
+                  </p>
+                </div>
+              </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-700">
@@ -1652,6 +1710,33 @@ setTotalPages(calculatedTotalPages);
                     {selectedRestaurant.is_active ? 'Actif' : 'Inactif'}
                   </p>
                 </div>
+
+                {selectedRestaurant.opening_hours && Object.keys(selectedRestaurant.opening_hours).length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">
+                      Horaires d&apos;ouverture
+                    </label>
+                    <div className="mt-2 space-y-1">
+                      {DAYS_OF_WEEK.map((day) => {
+                        const hours = selectedRestaurant.opening_hours?.[day.value];
+                        if (!hours) return null;
+                        const formatTime = (time: number) => {
+                          const hours = Math.floor(time / 100);
+                          const minutes = time % 100;
+                          return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                        };
+                        return (
+                          <div key={day.value} className="flex items-center gap-2 text-sm">
+                            <span className="w-24 font-medium text-gray-700">{day.label}:</span>
+                            <span className="text-gray-900">
+                              {formatTime(hours.open)} - {formatTime(hours.close)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 flex gap-3">
@@ -1741,12 +1826,24 @@ setTotalPages(calculatedTotalPages);
                   <input
                     type="email"
                     value={editForm.email || ''}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, email: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setEditForm({ ...editForm, email: e.target.value });
+                      if (editFormErrors.email) {
+                        setEditFormErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors.email;
+                          return newErrors;
+                        });
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                      editFormErrors.email ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="restaurant@example.com"
                   />
+                  {editFormErrors.email && (
+                    <p className="text-red-500 text-xs mt-1">{editFormErrors.email}</p>
+                  )}
                 </div>
 
                 <div>

@@ -17,23 +17,37 @@ export default function NotificationPopupWrapper({ onViewDetails }: Notification
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const checkSocket = async () => {
+    const checkSocket = () => {
       if (typeof window === 'undefined') {
         setChecking(false);
         return;
       }
 
-      try {
-        // Try to dynamically import socket.io-client
-        await import('socket.io-client');
+      // Check if Socket.IO is already loaded
+      if ((window as any).io) {
         setSocketAvailable(true);
-      } catch (error) {
-        // socket.io-client is not installed
-        console.warn('⚠️ socket.io-client not available, notifications disabled');
-        setSocketAvailable(false);
-      } finally {
         setChecking(false);
+        return;
       }
+
+      // Try to load Socket.IO from CDN
+      const script = document.createElement('script');
+      script.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+      script.onload = () => {
+        if ((window as any).io) {
+          setSocketAvailable(true);
+        } else {
+          console.warn('⚠️ Socket.IO loaded but io function not found');
+          setSocketAvailable(false);
+        }
+        setChecking(false);
+      };
+      script.onerror = () => {
+        console.warn('⚠️ Failed to load Socket.IO from CDN, notifications disabled');
+        setSocketAvailable(false);
+        setChecking(false);
+      };
+      document.head.appendChild(script);
     };
 
     checkSocket();

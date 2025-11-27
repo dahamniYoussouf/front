@@ -17,7 +17,8 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Phone
+  Phone,
+  UtensilsCrossed
 } from 'lucide-react';
 
 // =========================
@@ -1136,16 +1137,52 @@ setTotalPages(calculatedTotalPages);
     );
   };
 
+  // Composant pour afficher une image avec placeholder en cas d'erreur
+  const ImageWithPlaceholder: React.FC<{
+    src: string;
+    alt: string;
+    className?: string;
+    placeholderClassName?: string;
+    iconSize?: string;
+  }> = ({ src, alt, className = '', placeholderClassName = '', iconSize = 'w-10 h-10' }) => {
+    const [imageError, setImageError] = React.useState(false);
+
+    if (imageError) {
+      return (
+        <div className={`${placeholderClassName} rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center`}>
+          <UtensilsCrossed className={`${iconSize} text-gray-400 dark:text-gray-500`} />
+        </div>
+      );
+    }
+
+    return (
+      <img
+        src={src}
+        alt={alt}
+        className={className}
+        onError={() => setImageError(true)}
+      />
+    );
+  };
+
   const RestaurantListItem: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => (
     <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         {/* Image */}
         <div className="relative flex-shrink-0">
-          <img
-            src={restaurant.image_url || 'https://via.placeholder.com/80'}
-            alt={restaurant.name}
-            className="w-20 h-20 rounded-lg object-cover"
-          />
+          {restaurant.image_url ? (
+            <ImageWithPlaceholder
+              src={restaurant.image_url}
+              alt={restaurant.name}
+              className="w-20 h-20 rounded-lg object-cover"
+              placeholderClassName="w-20 h-20"
+              iconSize="w-10 h-10"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+              <UtensilsCrossed className="w-10 h-10 text-gray-400 dark:text-gray-500" />
+            </div>
+          )}
           {restaurant.is_premium && (
             <div className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
               <Star className="w-2.5 h-2.5 fill-white" />
@@ -1293,12 +1330,18 @@ setTotalPages(calculatedTotalPages);
         </span>
       </div>
 
-      {request.image_url && (
-        <img
+      {request.image_url ? (
+        <ImageWithPlaceholder
           src={request.image_url}
           alt={request.name}
           className="w-full h-32 sm:h-40 object-cover rounded-lg mb-3"
+          placeholderClassName="w-full h-32 sm:h-40 mb-3"
+          iconSize="w-16 h-16"
         />
+      ) : (
+        <div className="w-full h-32 sm:h-40 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-3">
+          <UtensilsCrossed className="w-16 h-16 text-gray-400 dark:text-gray-500" />
+        </div>
       )}
 
       <div className="space-y-2 text-sm text-gray-600 mb-4">
@@ -1604,12 +1647,18 @@ setTotalPages(calculatedTotalPages);
                 </button>
               </div>
 
-              {selectedRestaurant.image_url && (
-                <img
+              {selectedRestaurant.image_url ? (
+                <ImageWithPlaceholder
                   src={selectedRestaurant.image_url}
                   alt={selectedRestaurant.name}
                   className="w-full h-48 object-cover rounded-lg mb-4"
+                  placeholderClassName="w-full h-48 mb-4"
+                  iconSize="w-20 h-20"
                 />
+              ) : (
+                <div className="w-full h-48 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-4">
+                  <UtensilsCrossed className="w-20 h-20 text-gray-400 dark:text-gray-500" />
+                </div>
               )}
 
               <div className="space-y-4">

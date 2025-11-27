@@ -10,13 +10,18 @@ export default function ThemeScript() {
       const root = document.documentElement;
       if (theme === 'dark') {
         root.classList.add('dark');
-        root.style.backgroundColor = '#111827';
+        root.style.backgroundColor = '#0f172a';
         if (document.body) {
-          document.body.style.backgroundColor = '#111827';
-          document.body.style.color = '#f9fafb';
+          document.body.style.backgroundColor = '#0f172a';
+          document.body.style.color = '#f8fafc';
         }
       } else {
         root.classList.remove('dark');
+        root.style.backgroundColor = '';
+        if (document.body) {
+          document.body.style.backgroundColor = '';
+          document.body.style.color = '';
+        }
       }
     } catch (e) {
       console.error('Error applying theme:', e);

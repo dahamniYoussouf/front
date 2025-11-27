@@ -13,7 +13,8 @@ import {
   Banknote ,
   AlertCircle,
   RefreshCw,
-  LogOut
+  LogOut,
+  Bell
 } from 'lucide-react';
 
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -50,6 +51,12 @@ interface Stats {
     total: number;
     active: number;
     verified: number;
+  };
+  notifications: {
+    total: number;
+    unread: number;
+    unresolved: number;
+    resolved: number;
   };
 }
 
@@ -269,6 +276,28 @@ export default function AdminDashboard() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Top Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Notifications Non Lues */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Notifications Non Lues</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">
+                    {stats.notifications?.unread || 0}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    {stats.notifications?.unresolved || 0} non résolues
+                  </p>
+                </div>
+                <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full relative">
+                  <Bell className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+                  {stats.notifications?.unread > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                      {stats.notifications.unread > 99 ? '99+' : stats.notifications.unread}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
             {/* Total Orders */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
               <div className="flex items-center justify-between">

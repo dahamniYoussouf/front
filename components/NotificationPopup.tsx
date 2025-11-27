@@ -41,10 +41,10 @@ export default function NotificationPopup({ onViewDetails }: NotificationPopupPr
   const router = useRouter();
 
   useEffect(() => {
-    // Dynamically import socket.io-client
+    // Load Socket.IO from CDN
     let socketInstance: any = null;
 
-    const initSocket = async () => {
+    const initSocket = () => {
       try {
         const token = localStorage.getItem('access_token') || localStorage.getItem('token');
         if (!token) {
@@ -52,87 +52,106 @@ export default function NotificationPopup({ onViewDetails }: NotificationPopupPr
           return;
         }
 
-        // Dynamic import for socket.io-client (client-side only)
+        // Client-side only
         if (typeof window === 'undefined') return;
 
-        // Try to import socket.io-client, but don't fail if it's not installed
-        let io: any;
-        try {
-          const socketModule = await import('socket.io-client');
-          io = socketModule.io;
-          if (!io) {
-            throw new Error('io function not found in socket.io-client');
-          }
-          setSocketAvailable(true);
-        } catch (importError: any) {
-          console.warn('⚠️ socket.io-client not installed, notifications will not work in real-time');
-          console.warn('To enable real-time notifications, run: npm install socket.io-client');
-          console.warn('Error:', importError?.message || importError);
-          setSocketAvailable(false);
-          return;
-        }
-        
-        socketInstance = io(API_URL, {
-          auth: { token },
-          transports: ['websocket', 'polling'],
-          reconnection: true,
-          reconnectionDelay: 1000,
-          reconnectionAttempts: 5
-        });
-
-        socketInstance.on('connect', () => {
-          console.log('✅ Socket connected for notifications');
-          socketInstance.emit('join', 'admin');
-          socketInstance.emit('join', 'admins');
-        });
-
-        socketInstance.on('connect_error', (error: any) => {
-          console.error('❌ Socket connection error:', error);
-        });
-
-        socketInstance.on('disconnect', () => {
-          console.log('⚠️ Socket disconnected');
-        });
-
-        // Listen for new notifications
-        socketInstance.on('new_notification', (data: NotificationData) => {
-          console.log('🔔 New notification received:', data);
-          setNotification(data);
-          setShow(true);
-          
-          // Play notification sound if available
-          try {
-            playNotificationSound();
-          } catch (e) {
-            console.log('Could not play sound:', e);
-          }
-          
-          // Show browser notification
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            try {
-              new Notification('Nouvelle Notification Admin 🚨', {
-                body: data.message,
-                icon: '/logo_green.png',
-                requireInteraction: true
-              });
-            } catch (e) {
-              console.log('Could not show browser notification:', e);
+        const loadSocketIO = () => {
+          return new Promise<any>((resolve, reject) => {
+            // Check if Socket.IO is already loaded
+            if ((window as any).io) {
+              resolve((window as any).io);
+              return;
             }
-          }
-        });
 
-        socketInstance.on('driver_alert', (data: NotificationData) => {
-          console.log('🚨 Driver alert received:', data);
-          setNotification(data);
-          setShow(true);
-          try {
-            playNotificationSound();
-          } catch (e) {
-            console.log('Could not play sound:', e);
-          }
-        });
+            // Load Socket.IO from CDN
+            const script = document.createElement('script');
+            script.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+            script.onload = () => {
+              const io = (window as any).io;
+              if (io) {
+                resolve(io);
+              } else {
+                reject(new Error('io function not found after loading Socket.IO'));
+              }
+            };
+            script.onerror = () => {
+              reject(new Error('Failed to load Socket.IO from CDN'));
+            };
+            document.head.appendChild(script);
+          });
+        };
 
-        setSocket(socketInstance);
+        loadSocketIO()
+          .then((io: any) => {
+            setSocketAvailable(true);
+            
+            socketInstance = io(API_URL, {
+              auth: { token },
+              transports: ['websocket', 'polling'],
+              reconnection: true,
+              reconnectionDelay: 1000,
+              reconnectionAttempts: 5
+            });
+
+            socketInstance.on('connect', () => {
+              console.log('✅ Socket connected for notifications');
+              socketInstance.emit('join', 'admin');
+              socketInstance.emit('join', 'admins');
+            });
+
+            socketInstance.on('connect_error', (error: any) => {
+              console.error('❌ Socket connection error:', error);
+            });
+
+            socketInstance.on('disconnect', () => {
+              console.log('⚠️ Socket disconnected');
+            });
+
+            // Listen for new notifications
+            socketInstance.on('new_notification', (data: NotificationData) => {
+              console.log('🔔 New notification received:', data);
+              setNotification(data);
+              setShow(true);
+              
+              // Play notification sound if available
+              try {
+                playNotificationSound();
+              } catch (e) {
+                console.log('Could not play sound:', e);
+              }
+              
+              // Show browser notification
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                  new Notification('Nouvelle Notification Admin 🚨', {
+                    body: data.message,
+                    icon: '/logo_green.png',
+                    requireInteraction: true
+                  });
+                } catch (e) {
+                  console.log('Could not show browser notification:', e);
+                }
+              }
+            });
+
+            socketInstance.on('driver_alert', (data: NotificationData) => {
+              console.log('🚨 Driver alert received:', data);
+              setNotification(data);
+              setShow(true);
+              try {
+                playNotificationSound();
+              } catch (e) {
+                console.log('Could not play sound:', e);
+              }
+            });
+
+            setSocket(socketInstance);
+          })
+          .catch((error: any) => {
+            console.warn('⚠️ Socket.IO not available, notifications will not work in real-time');
+            console.warn('Error:', error?.message || error);
+            setSocketAvailable(false);
+          });
       } catch (error) {
         console.error('Error initializing socket:', error);
       }

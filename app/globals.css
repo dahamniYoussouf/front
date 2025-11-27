@@ -1,13 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f9fafb;
+  --background: #ffffff;
   --foreground: #111827;
   --card-bg: #ffffff;
   --border-color: #e5e7eb;
   --text-primary: #111827;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --input-bg: #ffffff;
+  --input-border: #d1d5db;
+  --hover-bg: #f9fafb;
+  --shadow: rgba(0, 0, 0, 0.1);
 }
 
 @theme inline {
@@ -18,13 +22,17 @@
 }
 
 .dark {
-  --background: #111827;
-  --foreground: #f9fafb;
-  --card-bg: #1f2937;
-  --border-color: #374151;
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-muted: #9ca3af;
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card-bg: #1e293b;
+  --border-color: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --input-bg: #1e293b;
+  --input-border: #475569;
+  --hover-bg: #334155;
+  --shadow: rgba(0, 0, 0, 0.3);
 }
 
 body {
@@ -36,76 +44,321 @@ body {
 
 /* Force dark mode sur les éléments principaux si la classe dark est présente */
 .dark body {
-  background-color: #111827 !important;
-  color: #f9fafb !important;
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
 }
 
 /* Styles dark mode globaux pour les éléments communs - Fallback pour les éléments sans classes dark: */
 html.dark {
-  background-color: #111827 !important;
+  background-color: #0f172a !important;
 }
 
 html.dark body {
-  background-color: #111827 !important;
-  color: #f9fafb !important;
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
 }
 
-/* Force dark mode sur les éléments sans classes dark: explicites */
+/* Force dark mode sur les éléments sans classes dark: explicites avec meilleurs contrastes */
 html.dark .bg-gray-50 {
-  background-color: #111827 !important;
+  background-color: #0f172a !important;
+}
+
+html.dark .bg-gray-100 {
+  background-color: #1e293b !important;
 }
 
 html.dark .bg-white {
-  background-color: #1f2937 !important;
+  background-color: #1e293b !important;
 }
 
+html.dark .bg-gray-200 {
+  background-color: #334155 !important;
+}
+
+html.dark .bg-gray-300 {
+  background-color: #475569 !important;
+}
+
+/* Text colors avec meilleurs contrastes */
 html.dark .text-gray-900 {
-  color: #f9fafb !important;
+  color: #f1f5f9 !important;
 }
 
 html.dark .text-gray-800 {
-  color: #f3f4f6 !important;
+  color: #e2e8f0 !important;
 }
 
 html.dark .text-gray-700 {
-  color: #d1d5db !important;
+  color: #cbd5e1 !important;
 }
 
 html.dark .text-gray-600 {
-  color: #d1d5db !important;
+  color: #cbd5e1 !important;
 }
 
 html.dark .text-gray-500 {
-  color: #9ca3af !important;
+  color: #94a3b8 !important;
 }
 
+html.dark .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+html.dark .text-gray-300 {
+  color: #cbd5e1 !important;
+}
+
+/* Borders avec meilleurs contrastes */
 html.dark .border-gray-200,
 html.dark .border-gray-300 {
-  border-color: #374151 !important;
+  border-color: #475569 !important;
 }
 
+html.dark .border-gray-400 {
+  border-color: #64748b !important;
+}
+
+html.dark .border-gray-500 {
+  border-color: #64748b !important;
+}
+
+html.dark .border-gray-600 {
+  border-color: #64748b !important;
+}
+
+html.dark .border-gray-700 {
+  border-color: #475569 !important;
+}
+
+/* Inputs avec meilleurs contrastes */
 html.dark input:not([type="checkbox"]):not([type="radio"]),
 html.dark textarea,
 html.dark select {
-  background-color: #1f2937 !important;
-  color: #f9fafb !important;
-  border-color: #4b5563 !important;
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+
+html.dark input:focus,
+html.dark textarea:focus,
+html.dark select:focus {
+  border-color: #60a5fa !important;
+  outline-color: #60a5fa !important;
 }
 
 html.dark input::placeholder,
 html.dark textarea::placeholder {
-  color: #9ca3af !important;
+  color: #94a3b8 !important;
 }
 
 /* Force dark mode sur les conteneurs principaux */
 html.dark [class*="min-h-screen"] {
-  background-color: #111827 !important;
+  background-color: #0f172a !important;
 }
 
 html.dark [class*="bg-gray-50"]:not([class*="dark:bg-"]) {
-  background-color: #111827 !important;
+  background-color: #0f172a !important;
 }
 
 html.dark [class*="bg-white"]:not([class*="dark:bg-"]) {
-  background-color: #1f2937 !important;
+  background-color: #1e293b !important;
+}
+
+/* Cards et containers */
+html.dark [class*="rounded-lg"]:not([class*="dark:"]) {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+/* Buttons avec meilleurs contrastes */
+html.dark button:not([class*="bg-"]):not([class*="text-"]) {
+  color: #f1f5f9 !important;
+}
+
+html.dark .bg-blue-600 {
+  background-color: #3b82f6 !important;
+}
+
+html.dark .bg-blue-700 {
+  background-color: #2563eb !important;
+}
+
+html.dark .bg-green-600 {
+  background-color: #10b981 !important;
+}
+
+html.dark .bg-green-700 {
+  background-color: #059669 !important;
+}
+
+html.dark .bg-red-600 {
+  background-color: #ef4444 !important;
+}
+
+html.dark .bg-red-700 {
+  background-color: #dc2626 !important;
+}
+
+html.dark .bg-yellow-500 {
+  background-color: #eab308 !important;
+}
+
+html.dark .bg-yellow-600 {
+  background-color: #ca8a04 !important;
+}
+
+html.dark .text-blue-600 {
+  color: #60a5fa !important;
+}
+
+html.dark .text-green-600 {
+  color: #34d399 !important;
+}
+
+html.dark .text-red-600 {
+  color: #f87171 !important;
+}
+
+html.dark .text-yellow-500 {
+  color: #fbbf24 !important;
+}
+
+html.dark .text-yellow-600 {
+  color: #fbbf24 !important;
+}
+
+/* Shadows en dark mode */
+html.dark [class*="shadow"] {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.dark [class*="shadow-md"] {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.dark [class*="shadow-lg"] {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Hover states avec meilleurs contrastes */
+html.dark [class*="hover:bg-gray"]:hover {
+  background-color: #334155 !important;
+}
+
+html.dark [class*="hover:text-gray"]:hover {
+  color: #f1f5f9 !important;
+}
+
+/* Scrollbar en dark mode */
+html.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 5px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Links en dark mode */
+html.dark a:not([class*="text-"]) {
+  color: #60a5fa !important;
+}
+
+html.dark a:hover:not([class*="text-"]) {
+  color: #93c5fd !important;
+}
+
+/* Tables en dark mode */
+html.dark table {
+  border-color: #334155 !important;
+}
+
+html.dark th {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+
+html.dark td {
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark tr:hover {
+  background-color: #334155 !important;
+}
+
+/* Modals et overlays */
+html.dark [class*="bg-black"]:not([class*="bg-opacity"]) {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+}
+
+html.dark [class*="bg-opacity-50"] {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+}
+
+/* Animations pour le Loader */
+@keyframes pulse-scale {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes progress {
+  0% {
+    width: 0%;
+    transform: translateX(0);
+  }
+  50% {
+    width: 70%;
+    transform: translateX(0);
+  }
+  100% {
+    width: 100%;
+    transform: translateX(0);
+  }
+}
+
+.animate-pulse-scale {
+  animation: pulse-scale 2s ease-in-out infinite;
+}
+
+.animate-progress {
+  animation: progress 1.5s ease-in-out infinite;
+}
+
+/* Amélioration des contrastes pour les badges et labels */
+html.dark .bg-gray-100 {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark .bg-gray-200 {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+/* Amélioration des contrastes pour les dropdowns et selects */
+html.dark select option {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+/* Amélioration des contrastes pour les tooltips */
+html.dark [role="tooltip"] {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
 }

@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart, User, Moon, Sun, Map } from 'lucide-react';
+import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart, User, Moon, Sun, Map, Database } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import NotificationPopupWrapper from '@/components/NotificationPopupWrapper';
@@ -98,6 +98,12 @@ export default function AdminLayout({
       path: '/admin/map'
     },
     {
+      title: 'Gestion du Cache',
+      icon: Database,
+      href: '/admin/cache',
+      path: '/admin/cache'
+    },
+    {
       title: 'Mon Profil',
       icon: User,
       href: '/admin/profil',
@@ -123,6 +129,7 @@ export default function AdminLayout({
       '/admin/announcements': 'Gestion des Annonces',
       '/admin/notifications': 'Gestion des Notifications',
       '/admin/configurations': 'Gestion des Configurations',
+      '/admin/cache': 'Gestion du Cache',
       '/admin/profil': 'Mon Profil'
     };
     return routes[pathname] || '';

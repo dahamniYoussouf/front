@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f9fafb;
+  --foreground: #111827;
+  --card-bg: #ffffff;
+  --border-color: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
 }
 
 @theme inline {
@@ -12,15 +17,95 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #111827;
+  --foreground: #f9fafb;
+  --card-bg: #1f2937;
+  --border-color: #374151;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Force dark mode sur les éléments principaux si la classe dark est présente */
+.dark body {
+  background-color: #111827 !important;
+  color: #f9fafb !important;
+}
+
+/* Styles dark mode globaux pour les éléments communs - Fallback pour les éléments sans classes dark: */
+html.dark {
+  background-color: #111827 !important;
+}
+
+html.dark body {
+  background-color: #111827 !important;
+  color: #f9fafb !important;
+}
+
+/* Force dark mode sur les éléments sans classes dark: explicites */
+html.dark .bg-gray-50 {
+  background-color: #111827 !important;
+}
+
+html.dark .bg-white {
+  background-color: #1f2937 !important;
+}
+
+html.dark .text-gray-900 {
+  color: #f9fafb !important;
+}
+
+html.dark .text-gray-800 {
+  color: #f3f4f6 !important;
+}
+
+html.dark .text-gray-700 {
+  color: #d1d5db !important;
+}
+
+html.dark .text-gray-600 {
+  color: #d1d5db !important;
+}
+
+html.dark .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+html.dark .border-gray-200,
+html.dark .border-gray-300 {
+  border-color: #374151 !important;
+}
+
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark textarea,
+html.dark select {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+  border-color: #4b5563 !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Force dark mode sur les conteneurs principaux */
+html.dark [class*="min-h-screen"] {
+  background-color: #111827 !important;
+}
+
+html.dark [class*="bg-gray-50"]:not([class*="dark:bg-"]) {
+  background-color: #111827 !important;
+}
+
+html.dark [class*="bg-white"]:not([class*="dark:bg-"]) {
+  background-color: #1f2937 !important;
 }

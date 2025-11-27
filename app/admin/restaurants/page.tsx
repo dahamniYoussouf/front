@@ -161,7 +161,11 @@ const api = {
         body: JSON.stringify(requestBody)
       });
 
-      if (!response.ok) throw new Error('Failed to fetch restaurants');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Restaurant filter error response:', errorText);
+        throw new Error(`Failed to fetch restaurants: ${response.status} ${response.statusText}`);
+      }
 
       const result = await response.json();
       return {
@@ -170,8 +174,15 @@ const api = {
         totalPages: result.totalPages || 1,
         page: result.page || 1
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching restaurants:', error);
+      // Log more details about the error
+      if (error.message) {
+        console.error('Error message:', error.message);
+      }
+      if (error.stack) {
+        console.error('Error stack:', error.stack);
+      }
       return { data: [], count: 0, totalPages: 1, page: 1 };
     }
   },
@@ -195,7 +206,11 @@ const api = {
         body: JSON.stringify(requestBody)
       });
 
-      if (!response.ok) throw new Error('Failed to fetch pending requests');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Pending requests error response:', errorText);
+        throw new Error(`Failed to fetch pending requests: ${response.status} ${response.statusText}`);
+      }
 
       const result = await response.json();
       const pendingRestaurants: Restaurant[] = result.data || [];
@@ -204,8 +219,12 @@ const api = {
         data: pendingRestaurants,
         count: pendingRestaurants.length
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching pending requests:', error);
+      // Log more details about the error
+      if (error.message) {
+        console.error('Error message:', error.message);
+      }
       return { data: [], count: 0 };
     }
   },
@@ -493,9 +512,9 @@ export default function AdminRestaurantManagement() {
         }
 
         setRestaurants(allRestaurants);
-        const calculatedTotalPages = result.count > 0 
-  ? Math.ceil(result.count / pageSize) 
-  : 1;
+        const calculatedTotalPages = result.totalPages || (result.count > 0 
+          ? Math.ceil(result.count / pageSize) 
+          : 1);
 
 setTotalPages(calculatedTotalPages);
         setTotalCount(result.count);
@@ -1321,12 +1340,12 @@ setTotalPages(calculatedTotalPages);
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Notification */}
       {notification && (
         <div
           className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 ${
-            notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+            notification.type === 'error' ? 'bg-red-500 dark:bg-red-600' : 'bg-green-500 dark:bg-green-600'
           } text-white`}
         >
           {notification.type === 'error' ? (
@@ -1339,10 +1358,10 @@ setTotalPages(calculatedTotalPages);
       )}
 
       {/* Header */}
-      <div className="bg-white border-b">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               Gestion des Restaurants
             </h1>
             <div className="flex flex-wrap gap-2 md:gap-3 justify-end">

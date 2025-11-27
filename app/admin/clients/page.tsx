@@ -59,10 +59,10 @@ export default function ClientManagement() {
   const [totalCount, setTotalCount] = useState<number>(0);
   const [pageSize, setPageSize] = useState<number>(20);
 
-  // Récupérer les clients depuis le backend
+  // Récupérer les clients depuis le backend avec recherche et filtres
   useEffect(() => {
     fetchClients();
-  }, []);
+  }, [currentPage, pageSize, searchTerm, filterStatus]);
 
   const fetchClients = async () => {
     try {
@@ -76,7 +76,29 @@ export default function ClientManagement() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/client/getall`, {
+      // Construire les paramètres de requête
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: pageSize.toString()
+      });
+
+      // Ajouter la recherche si elle existe
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+      }
+
+      // Ajouter les filtres de statut
+      if (filterStatus === 'active') {
+        params.append('is_active', 'true');
+      } else if (filterStatus === 'suspended') {
+        params.append('is_active', 'false');
+      } else if (filterStatus === 'verified') {
+        params.append('is_verified', 'true');
+      } else if (filterStatus === 'unverified') {
+        params.append('is_verified', 'false');
+      }
+
+      const response = await fetch(`${API_URL}/client/getall?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -91,6 +113,12 @@ export default function ClientManagement() {
 
       if (data.success && data.data) {
         setClients(data.data as Client[]);
+        
+        // Mettre à jour la pagination depuis le backend
+        if (data.pagination) {
+          setTotalCount(data.pagination.total_items || 0);
+          setTotalPages(data.pagination.total_pages || 1);
+        }
       } else {
         throw new Error('Format de données invalide');
       }
@@ -102,47 +130,14 @@ export default function ClientManagement() {
     }
   };
 
-  // Filtrer les clients
-  const filteredClients = clients.filter((client) => {
-    const search = searchTerm.toLowerCase();
-
-    const matchesSearch =
-      client.first_name?.toLowerCase().includes(search) ||
-      client.last_name?.toLowerCase().includes(search) ||
-      client.email?.toLowerCase().includes(search) ||
-      client.phone_number?.includes(searchTerm);
-
-    const matchesFilter =
-      filterStatus === 'all' ||
-      (filterStatus === 'active' && client.status === 'active') ||
-      (filterStatus === 'suspended' && client.status === 'suspended') ||
-      (filterStatus === 'verified' && client.is_verified) ||
-      (filterStatus === 'unverified' && !client.is_verified);
-
-    return matchesSearch && matchesFilter;
-  });
-
-  useEffect(() => {
-    const newTotalCount = filteredClients.length;
-    setTotalCount(newTotalCount);
-    const newTotalPages = Math.max(1, Math.ceil(newTotalCount / pageSize));
-    setTotalPages(newTotalPages);
-    if (currentPage > newTotalPages) {
-      setCurrentPage(newTotalPages);
-    }
-    if (currentPage < 1) {
-      setCurrentPage(1);
-    }
-  }, [filteredClients.length, pageSize, currentPage]);
-
+  // Réinitialiser à la page 1 quand la recherche ou le filtre change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterStatus]);
 
   const startIndex = (currentPage - 1) * pageSize;
-  const paginatedClients = filteredClients.slice(startIndex, startIndex + pageSize);
   const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
-  const showingTo = startIndex + paginatedClients.length;
+  const showingTo = Math.min(startIndex + clients.length, totalCount);
 
   const handlePageChange = (direction: 'prev' | 'next') => {
     if (direction === 'prev' && currentPage > 1) {
@@ -300,22 +295,21 @@ export default function ClientManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Gestion des Clients</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                {totalCount} client{totalCount > 1 ? 's' : ''} trouvé
-                {totalCount > 1 ? 's' : ''}
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Gestion des Clients</h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {totalCount} client{totalCount !== 1 ? 's' : ''} trouvé{totalCount !== 1 ? 's' : ''}
               </p>
             </div>
             <button
               onClick={fetchClients}
               disabled={loading}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50 transition-colors"
             >
               {loading ? 'Chargement...' : 'Actualiser'}
             </button>
@@ -323,11 +317,11 @@ export default function ClientManagement() {
 
           {/* Message d'erreur global */}
           {error && (
-            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-red-800">Erreur</p>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
+                <p className="text-sm font-medium text-red-800 dark:text-red-300">Erreur</p>
+                <p className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</p>
               </div>
             </div>
           )}
@@ -414,7 +408,7 @@ export default function ClientManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedClients.map((client) => (
+                  {clients.map((client) => (
                     <tr key={client.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">

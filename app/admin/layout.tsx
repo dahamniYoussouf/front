@@ -1,8 +1,10 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart } from 'lucide-react';
+import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart, User, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import NotificationPopupWrapper from '@/components/NotificationPopupWrapper';
+import { useTheme } from '@/contexts/ThemeContext';
 
 
 export default function AdminLayout({
@@ -13,6 +15,7 @@ export default function AdminLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   // Vérifier l'authentification
   useEffect(() => {
@@ -87,6 +90,12 @@ export default function AdminLayout({
       icon: Settings,
       href: '/admin/configurations',
       path: '/admin/configurations'
+    },
+    {
+      title: 'Mon Profil',
+      icon: User,
+      href: '/admin/profil',
+      path: '/admin/profil'
     }
   ];
 
@@ -107,13 +116,14 @@ export default function AdminLayout({
       '/admin/commandes': 'Gestion des Commandes',
       '/admin/announcements': 'Gestion des Annonces',
       '/admin/notifications': 'Gestion des Notifications',
-      '/admin/configurations': 'Gestion des Configurations'
+      '/admin/configurations': 'Gestion des Configurations',
+      '/admin/profil': 'Mon Profil'
     };
     return routes[pathname] || '';
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       {/* Overlay pour mobile */}
       {sidebarOpen && (
         <div 
@@ -125,12 +135,12 @@ export default function AdminLayout({
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50
-        w-64 bg-white border-r border-gray-200 flex flex-col
+        w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Logo */}
-        <div className="h-16 flex items-center justify-between border-b border-gray-200 px-4">
+        <div className="h-16 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-4">
           <div className="flex items-center gap-2">
             <Image
               src="/logo_green.png"
@@ -142,7 +152,7 @@ export default function AdminLayout({
           {/* Bouton fermer sur mobile */}
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-2 text-gray-500 hover:text-gray-700"
+            className="lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
           >
             <X className="w-5 h-5" />
           </button>
@@ -160,8 +170,8 @@ export default function AdminLayout({
                 onClick={() => router.push(item.href)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive
-                    ? 'bg-green-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'bg-green-600 dark:bg-green-700 text-white'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
@@ -172,10 +182,10 @@ export default function AdminLayout({
         </nav>
 
         {/* Footer - Logout */}
-        <div className="p-3 border-t border-gray-200">
+        <div className="p-3 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
             <span className="font-medium text-sm">Déconnexion</span>
@@ -186,44 +196,64 @@ export default function AdminLayout({
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden w-full lg:w-auto">
         {/* Top Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6">
+        <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3 md:gap-4">
             {/* Bouton menu hamburger sur mobile */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 text-gray-500 hover:text-gray-700"
+              className="lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
             >
               <Menu className="w-6 h-6" />
             </button>
             
             <button 
               onClick={() => router.back()}
-              className="hidden md:block text-gray-400 hover:text-gray-600"
+              className="hidden md:block text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
             >
               ←
             </button>
-            <span className="text-gray-700 font-medium text-sm md:text-base truncate">
+            <span className="text-gray-700 dark:text-gray-300 font-medium text-sm md:text-base truncate">
               {getBreadcrumb(pathname)}
             </span>
           </div>
           
           <div className="flex items-center gap-2 md:gap-4">
-            <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title={theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-5 h-5" />
+              ) : (
+                <Moon className="w-5 h-5" />
+              )}
+            </button>
+            
+            <button className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
               <Settings className="w-5 h-5" />
             </button>
             
             {/* User Avatar */}
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-300 rounded-full flex items-center justify-center">
-              <span className="text-xs md:text-sm font-semibold text-gray-700">AD</span>
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
+              <span className="text-xs md:text-sm font-semibold text-gray-700 dark:text-gray-300">AD</span>
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gray-50">
+        <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900">
           {children}
         </main>
       </div>
+
+      {/* Notification Popup - Only render if socket.io-client is available */}
+      <NotificationPopupWrapper 
+        onViewDetails={(notificationId) => {
+          router.push(`/admin/notifications`);
+        }}
+      />
     </div>
   );
 }

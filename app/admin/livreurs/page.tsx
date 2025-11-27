@@ -116,6 +116,9 @@ export default function DriverManagement() {
   // Pagination states
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [totalDriversCount, setTotalDriversCount] = useState<number>(0);
 
   // Image upload states
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
@@ -138,10 +141,15 @@ export default function DriverManagement() {
     profile_image_url: ''
   });
 
-  // Récupérer les livreurs depuis le backend
+  // Récupérer les livreurs depuis le backend avec recherche et filtres
   useEffect(() => {
-    fetchDrivers();
-  }, []);
+    if (activeTab === 'all') {
+      fetchDrivers();
+    } else if (activeTab === 'requests') {
+      fetchPendingDrivers();
+      fetchTotalDriversCount();
+    }
+  }, [currentPage, pageSize, searchTerm, filterStatus, activeTab]);
 
   useEffect(() => {
     applyPendingSearchFilter();
@@ -159,7 +167,33 @@ export default function DriverManagement() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/driver/getall`, {
+      // Construire les paramètres de requête
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: pageSize.toString()
+      });
+
+      // Ajouter la recherche si elle existe
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+      }
+
+      // Ajouter les filtres de statut
+      if (filterStatus === 'available') {
+        params.append('status', 'available');
+      } else if (filterStatus === 'busy') {
+        params.append('status', 'busy');
+      } else if (filterStatus === 'offline') {
+        params.append('status', 'offline');
+      } else if (filterStatus === 'suspended') {
+        params.append('status', 'suspended');
+      } else if (filterStatus === 'verified') {
+        params.append('is_verified', 'true');
+      } else if (filterStatus === 'unverified') {
+        params.append('is_verified', 'false');
+      }
+
+      const response = await fetch(`${API_URL}/driver/getall?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -176,10 +210,13 @@ export default function DriverManagement() {
         const allDrivers = data.data as Driver[];
         setDrivers(allDrivers);
         
-        // Séparer les livreurs non vérifiés et non suspendus
-        const unverified = allDrivers.filter(d => !d.is_verified && d.status !== 'suspended');
-        setPendingDrivers(unverified);
-        setFilteredPendingDrivers(unverified);
+        // Mettre à jour la pagination depuis le backend
+        if (data.pagination) {
+          setTotalCount(data.pagination.total_items || 0);
+          setTotalPages(data.pagination.total_pages || 1);
+          setTotalDriversCount(data.pagination.total_items || 0);
+        }
+        
       } else {
         throw new Error('Format de données invalide');
       }
@@ -191,36 +228,121 @@ export default function DriverManagement() {
     }
   };
 
-  // Filtrer les livreurs
-  const filteredDrivers = drivers.filter((driver) => {
-    const search = searchTerm.toLowerCase();
+  // Récupérer toutes les demandes en attente (sans pagination)
+  const fetchPendingDrivers = async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-    const matchesSearch =
-      driver.first_name?.toLowerCase().includes(search) ||
-      driver.last_name?.toLowerCase().includes(search) ||
-      driver.email?.toLowerCase().includes(search) ||
-      driver.phone?.includes(searchTerm) ||
-      driver.driver_code?.toLowerCase().includes(search);
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setError('Non authentifié. Veuillez vous reconnecter.');
+        setLoading(false);
+        return;
+      }
 
-    const matchesFilter =
-      filterStatus === 'all' ||
-      (filterStatus === 'available' && driver.status === 'available') ||
-      (filterStatus === 'busy' && driver.status === 'busy') ||
-      (filterStatus === 'offline' && driver.status === 'offline') ||
-      (filterStatus === 'suspended' && driver.status === 'suspended') ||
-      (filterStatus === 'verified' && driver.is_verified) ||
-      (filterStatus === 'unverified' && !driver.is_verified);
+      // Récupérer tous les livreurs non vérifiés
+      // Utiliser une limite élevée mais raisonnable (100) et récupérer toutes les pages si nécessaire
+      const params = new URLSearchParams({
+        page: '1',
+        limit: '100' // Limite maximale autorisée par le backend
+      });
+      // Ajouter is_verified comme booléen (le backend le convertit correctement)
+      params.append('is_verified', 'false');
 
-    return matchesSearch && matchesFilter;
-  });
+      const response = await fetch(`${API_URL}/driver/getall?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-  // Calculer la pagination
-  const totalPages = Math.ceil(filteredDrivers.length / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedDrivers = filteredDrivers.slice(startIndex, endIndex);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Erreur lors du chargement des demandes: ${response.status} ${response.statusText}`);
+      }
 
-  // Reset à la page 1 quand les filtres changent
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        // Filtrer pour exclure les suspendus
+        const allPending = (data.data as Driver[]).filter(d => d.status !== 'suspended');
+        setPendingDrivers(allPending);
+        setFilteredPendingDrivers(allPending);
+        
+        // Si il y a plus de résultats, récupérer les pages suivantes
+        if (data.pagination && data.pagination.total_pages > 1) {
+          const allPages: Driver[] = [...allPending];
+          
+          // Récupérer les pages restantes
+          for (let page = 2; page <= data.pagination.total_pages; page++) {
+            try {
+              const pageParams = new URLSearchParams({
+                page: page.toString(),
+                limit: '100'
+              });
+              pageParams.append('is_verified', 'false');
+              
+              const pageResponse = await fetch(`${API_URL}/driver/getall?${pageParams.toString()}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              if (pageResponse.ok) {
+                const pageData = await pageResponse.json();
+                if (pageData.success && pageData.data) {
+                  const pagePending = (pageData.data as Driver[]).filter(d => d.status !== 'suspended');
+                  allPages.push(...pagePending);
+                }
+              }
+            } catch (pageErr) {
+              console.warn(`Erreur lors du chargement de la page ${page}:`, pageErr);
+            }
+          }
+          
+          setPendingDrivers(allPages);
+          setFilteredPendingDrivers(allPages);
+        }
+      } else {
+        throw new Error('Format de données invalide');
+      }
+    } catch (err: any) {
+      console.error('Erreur fetch pending drivers:', err);
+      setError(err?.message || 'Impossible de charger les demandes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Récupérer le nombre total de tous les livreurs
+  const fetchTotalDriversCount = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
+
+      // Récupérer juste le count total (première page avec limit 1)
+      const response = await fetch(`${API_URL}/driver/getall?page=1&limit=1`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.pagination) {
+          setTotalDriversCount(data.pagination.total_items || 0);
+        }
+      }
+    } catch (err: any) {
+      console.error('Erreur fetch total drivers count:', err);
+    }
+  };
+
+  // Réinitialiser à la page 1 quand la recherche ou le filtre change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterStatus]);
@@ -753,17 +875,25 @@ export default function DriverManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="w-full">
-              <h1 className="text-2xl font-bold text-gray-900">Gestion des Livreurs</h1>
+              <div className="flex items-center gap-4">
+                <h1 className="text-2xl font-bold text-gray-900">Gestion des Livreurs</h1>
+                {activeTab === 'all' && totalDriversCount > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+                    <p className="text-xs text-blue-600 font-medium">Total livreurs</p>
+                    <p className="text-lg font-bold text-blue-700">{totalDriversCount}</p>
+                  </div>
+                )}
+              </div>
               <p className="mt-1 text-sm text-gray-500">
                 {activeTab === 'all' 
-                  ? `${filteredDrivers.length} livreur${filteredDrivers.length > 1 ? 's' : ''} trouvé${filteredDrivers.length > 1 ? 's' : ''}`
-                  : `${pendingDrivers.length} demande${pendingDrivers.length > 1 ? 's' : ''} en attente`
+                  ? `${drivers.length} livreur${drivers.length !== 1 ? 's' : ''} affiché${drivers.length !== 1 ? 's' : ''} sur ${totalDriversCount || totalCount}`
+                  : `${pendingDrivers.length} demande${pendingDrivers.length !== 1 ? 's' : ''} en attente`
                 }
               </p>
             </div>
@@ -798,7 +928,7 @@ export default function DriverManagement() {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              Tous les livreurs ({drivers.length})
+              Tous les livreurs ({totalDriversCount || totalCount || drivers.length})
             </button>
             <button
               onClick={() => setActiveTab('requests')}
@@ -920,7 +1050,7 @@ export default function DriverManagement() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedDrivers.map((driver) => (
+                  {drivers.map((driver) => (
                     <tr key={driver.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -1059,7 +1189,7 @@ export default function DriverManagement() {
               </table>
             </div>
 
-            {filteredDrivers.length === 0 && (
+            {drivers.length === 0 && (
               <div className="text-center py-12">
                 <UserX className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-sm font-medium text-gray-900">
@@ -1072,15 +1202,15 @@ export default function DriverManagement() {
             )}
 
             {/* Pagination */}
-            {filteredDrivers.length > 0 && (
+            {drivers.length > 0 && (
               <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
                 <div className="text-sm text-gray-700">
-                  Affichage de <span className="font-medium">{startIndex + 1}</span> à{' '}
+                  Affichage de <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> à{' '}
                   <span className="font-medium">
-                    {Math.min(endIndex, filteredDrivers.length)}
+                    {Math.min(currentPage * pageSize, totalCount)}
                   </span>{' '}
-                  sur <span className="font-medium">{filteredDrivers.length}</span> livreur
-                  {filteredDrivers.length > 1 ? 's' : ''}
+                  sur <span className="font-medium">{totalCount}</span> livreur
+                  {totalCount !== 1 ? 's' : ''}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1135,12 +1265,26 @@ export default function DriverManagement() {
         ) : (
           /* Onglet Demandes en attente */
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              Demandes de livreurs en attente
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Consultez et gérez les demandes d'inscription des nouveaux livreurs.
-            </p>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                Demandes de livreurs en attente
+              </h2>
+              <div className="flex flex-wrap gap-4 items-center">
+                <p className="text-gray-600">
+                  Consultez et gérez les demandes d'inscription des nouveaux livreurs.
+                </p>
+                <div className="ml-auto flex gap-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+                    <p className="text-xs text-blue-600 font-medium">Total demandes</p>
+                    <p className="text-lg font-bold text-blue-700">{pendingDrivers.length}</p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+                    <p className="text-xs text-green-600 font-medium">Total livreurs</p>
+                    <p className="text-lg font-bold text-green-700">{totalDriversCount}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="mb-6">
               <div className="relative w-full max-w-md">

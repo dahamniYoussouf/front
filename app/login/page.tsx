@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="min-h-screen flex bg-white dark:bg-gray-900">
       {/* Left Side - Tablecloth Background with Floating Plate */}
       <div className="hidden lg:block lg:w-1/2 relative overflow-hidden">
         {/* Tablecloth texture background */}
@@ -64,7 +64,7 @@ export default function AdminLoginPage() {
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
@@ -79,17 +79,17 @@ export default function AdminLoginPage() {
 
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-3">
               Connectez-vous à Tawsil Admin
             </h1>
-            <p className="text-gray-500 text-base">
+            <p className="text-gray-500 dark:text-gray-400 text-base">
               Bienvenue chez Tawsil Admin — Gère facilement les livraisons
             </p>
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
               {error}
             </div>
           )}
@@ -98,7 +98,7 @@ export default function AdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Input */}
             <div>
-              <label htmlFor="email" className="block text-base font-medium text-gray-800 mb-2">
+              <label htmlFor="email" className="block text-base font-medium text-gray-800 dark:text-gray-200 mb-2">
                 Adresse Mail
               </label>
               <input
@@ -107,14 +107,14 @@ export default function AdminLoginPage() {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-3.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder-gray-400"
+                className="w-full px-4 py-3.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-lg focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent outline-none transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="Entrez votre adresse mail"
               />
             </div>
 
             {/* Password Input */}
             <div>
-              <label htmlFor="password" className="block text-base font-medium text-gray-800 mb-2">
+              <label htmlFor="password" className="block text-base font-medium text-gray-800 dark:text-gray-200 mb-2">
                 Mot de passe
               </label>
               <div className="relative">
@@ -124,13 +124,13 @@ export default function AdminLoginPage() {
                   required
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-4 py-3.5 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3.5 pr-12 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 rounded-lg focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent outline-none transition-all text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
                   placeholder="Saisissez votre mot de passe"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   {showPassword ? (
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +147,7 @@ export default function AdminLoginPage() {
               
               {/* Forgot Password Link */}
               <div className="text-right mt-3">
-                <a href="#" className="text-sm text-gray-600 hover:text-gray-800">
+                <a href="#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
                   Mot de passe oublié ?
                 </a>
               </div>
@@ -157,7 +157,7 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 text-base"
+              className="w-full py-4 px-4 bg-green-600 dark:bg-green-700 hover:bg-green-700 dark:hover:bg-green-600 text-white font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900 text-base"
             >
               {loading ? (
                 <span className="flex items-center justify-center">

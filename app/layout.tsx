@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { Providers } from '@/components/Providers';
+import ThemeScript from '@/components/ThemeScript';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,11 +17,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.style.backgroundColor='#111827';}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className={inter.className}>
-        <AuthProvider>
+        <ThemeScript />
+        <Providers>
           {children}
-        </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

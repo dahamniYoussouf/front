@@ -10,78 +10,215 @@ import {
   Users,
   MapPin,
   CheckCircle,
-  TrendingUp
+  TrendingUp,
+  Clock,
+  DollarSign,
+  Bell,
+  Truck,
+  Package,
+  RefreshCw,
+  Info
 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 // ==== TYPES ====
 
-interface DeliveryConfig {
-  max_orders_per_driver: number;
-  max_distance_between_restaurants: number;
+interface ConfigItem {
+  key: string;
+  value: any;
+  description: string;
+  updated_at?: string;
+  updated_by?: string;
 }
 
-interface ConfigItem {
-  id: string;
+interface ConfigCategory {
+  name: string;
+  title: string;
+  icon: any;
+  color: string;
+  configs: ConfigItem[];
+}
+
+interface ConfigMetadata {
+  key: string;
   title: string;
   description: string;
-  value: number;
   unit: string;
   min: number;
   max: number;
   icon: any;
   color: string;
+  category: string;
 }
 
 type ModalType = '' | 'edit';
 
+// Metadata pour toutes les configurations
+const configMetadata: Record<string, ConfigMetadata> = {
+  'max_orders_per_driver': {
+    key: 'max_orders_per_driver',
+    title: 'Commandes Max par Livreur',
+    description: 'Nombre maximum de commandes qu\'un livreur peut gérer simultanément',
+    unit: 'commandes',
+    min: 1,
+    max: 10,
+    icon: Users,
+    color: 'blue',
+    category: 'delivery'
+  },
+  'max_distance_between_restaurants': {
+    key: 'max_distance_between_restaurants',
+    title: 'Distance Max entre Restaurants',
+    description: 'Distance maximale en mètres entre restaurants pour les livraisons multiples',
+    unit: 'mètres',
+    min: 100,
+    max: 5000,
+    icon: MapPin,
+    color: 'green',
+    category: 'delivery'
+  },
+  'driver_search_radius': {
+    key: 'driver_search_radius',
+    title: 'Rayon de Recherche Livreurs',
+    description: 'Rayon de recherche par défaut (en mètres) pour trouver les livreurs à proximité',
+    unit: 'mètres',
+    min: 1000,
+    max: 20000,
+    icon: MapPin,
+    color: 'blue',
+    category: 'delivery'
+  },
+  'max_delivery_distance': {
+    key: 'max_delivery_distance',
+    title: 'Distance Max de Livraison',
+    description: 'Distance maximale de livraison en kilomètres',
+    unit: 'km',
+    min: 1,
+    max: 100,
+    icon: MapPin,
+    color: 'purple',
+    category: 'delivery'
+  },
+  'pending_order_timeout': {
+    key: 'pending_order_timeout',
+    title: 'Délai Notification Commande',
+    description: 'Temps en minutes avant de notifier l\'admin d\'une commande en attente',
+    unit: 'minutes',
+    min: 1,
+    max: 60,
+    icon: Clock,
+    color: 'yellow',
+    category: 'orders'
+  },
+  'default_preparation_time': {
+    key: 'default_preparation_time',
+    title: 'Temps de Préparation par Défaut',
+    description: 'Temps de préparation par défaut pour les commandes en minutes',
+    unit: 'minutes',
+    min: 5,
+    max: 120,
+    icon: Clock,
+    color: 'orange',
+    category: 'orders'
+  },
+  'default_delivery_fee': {
+    key: 'default_delivery_fee',
+    title: 'Frais de Livraison par Défaut',
+    description: 'Frais de livraison par défaut en DA',
+    unit: 'DA',
+    min: 0,
+    max: 10000,
+    icon: DollarSign,
+    color: 'green',
+    category: 'fees'
+  },
+  'delivery_fee_per_km': {
+    key: 'delivery_fee_per_km',
+    title: 'Frais de Livraison par Km',
+    description: 'Frais de livraison supplémentaires par kilomètre en DA',
+    unit: 'DA/km',
+    min: 0,
+    max: 1000,
+    icon: DollarSign,
+    color: 'blue',
+    category: 'fees'
+  },
+  'platform_commission_rate': {
+    key: 'platform_commission_rate',
+    title: 'Taux de Commission Plateforme',
+    description: 'Taux de commission de la plateforme en pourcentage',
+    unit: '%',
+    min: 0,
+    max: 50,
+    icon: TrendingUp,
+    color: 'purple',
+    category: 'fees'
+  },
+  'max_driver_cancellations': {
+    key: 'max_driver_cancellations',
+    title: 'Annulations Max Livreur',
+    description: 'Nombre maximum d\'annulations avant notification admin',
+    unit: 'annulations',
+    min: 1,
+    max: 20,
+    icon: Truck,
+    color: 'red',
+    category: 'drivers'
+  }
+};
+
+const categoryInfo: Record<string, { title: string; icon: any; color: string }> = {
+  delivery: {
+    title: 'Livraison',
+    icon: Package,
+    color: 'blue'
+  },
+  orders: {
+    title: 'Commandes',
+    icon: Clock,
+    color: 'yellow'
+  },
+  fees: {
+    title: 'Tarifs & Commissions',
+    icon: DollarSign,
+    color: 'green'
+  },
+  notifications: {
+    title: 'Notifications',
+    icon: Bell,
+    color: 'orange'
+  },
+  drivers: {
+    title: 'Livreurs',
+    icon: Truck,
+    color: 'red'
+  },
+  platform: {
+    title: 'Plateforme',
+    icon: Settings,
+    color: 'purple'
+  }
+};
+
 export default function ConfigManagement() {
-  const [config, setConfig] = useState<DeliveryConfig>({
-    max_orders_per_driver: 5,
-    max_distance_between_restaurants: 500
-  });
+  const [configs, setConfigs] = useState<Record<string, ConfigItem[]>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
   const [selectedConfig, setSelectedConfig] = useState<ConfigItem | null>(null);
+  const [selectedMetadata, setSelectedMetadata] = useState<ConfigMetadata | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>('');
   const [editValue, setEditValue] = useState<number>(0);
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
 
-  // Configuration items
-  const configItems: ConfigItem[] = [
-    {
-      id: 'max_orders',
-      title: 'Commandes Max par Livreur',
-      description: 'Nombre maximum de commandes qu\'un livreur peut gérer simultanément',
-      value: config.max_orders_per_driver,
-      unit: 'commandes',
-      min: 1,
-      max: 10,
-      icon: Users,
-      color: 'blue'
-    },
-    {
-      id: 'max_distance',
-      title: 'Distance Max entre Restaurants',
-      description: 'Distance maximale en mètres entre restaurants pour les livraisons multiples',
-      value: config.max_distance_between_restaurants,
-      unit: 'mètres',
-      min: 100,
-      max: 5000,
-      icon: MapPin,
-      color: 'green'
-    }
-  ];
-
-  // Fetch configuration
+  // Fetch all configurations
   useEffect(() => {
-    fetchConfig();
+    fetchAllConfigs();
   }, []);
 
-  const fetchConfig = async () => {
+  const fetchAllConfigs = async () => {
     try {
       setLoading(true);
       setError('');
@@ -93,7 +230,7 @@ export default function ConfigManagement() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/admin/config/delivery`, {
+      const response = await fetch(`${API_URL}/admin/config/all`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -101,35 +238,44 @@ export default function ConfigManagement() {
       });
 
       if (!response.ok) {
-        throw new Error('Erreur lors du chargement de la configuration');
+        throw new Error('Erreur lors du chargement des configurations');
       }
 
       const data = await response.json();
 
       if (data.success && data.data) {
-        setConfig(data.data);
+        setConfigs(data.data);
       } else {
         throw new Error('Format de données invalide');
       }
     } catch (err: any) {
-      console.error('Erreur fetch config:', err);
-      setError(err?.message || 'Impossible de charger la configuration');
+      console.error('Erreur fetch configs:', err);
+      setError(err?.message || 'Impossible de charger les configurations');
     } finally {
       setLoading(false);
     }
   };
 
   // Handle edit
-  const handleEdit = (item: ConfigItem) => {
-    setSelectedConfig(item);
-    setEditValue(item.value);
+  const handleEdit = (config: ConfigItem) => {
+    const metadata = configMetadata[config.key];
+    if (!metadata) {
+      setError('Configuration non trouvée');
+      return;
+    }
+
+    setSelectedConfig(config);
+    setSelectedMetadata(metadata);
+    setEditValue(Number(config.value));
     setModalType('edit');
     setShowModal(true);
+    setError('');
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedConfig(null);
+    setSelectedMetadata(null);
     setModalType('');
     setEditValue(0);
     setSaveLoading(false);
@@ -137,14 +283,14 @@ export default function ConfigManagement() {
   };
 
   const handleSave = async () => {
-    if (!selectedConfig) {
+    if (!selectedConfig || !selectedMetadata) {
       setError('Aucune configuration sélectionnée');
       return;
     }
 
     // Validation
-    if (editValue < selectedConfig.min || editValue > selectedConfig.max) {
-      setError(`La valeur doit être entre ${selectedConfig.min} et ${selectedConfig.max}`);
+    if (editValue < selectedMetadata.min || editValue > selectedMetadata.max) {
+      setError(`La valeur doit être entre ${selectedMetadata.min} et ${selectedMetadata.max}`);
       return;
     }
 
@@ -157,22 +303,14 @@ export default function ConfigManagement() {
         throw new Error('Non authentifié');
       }
 
-      const endpoint = selectedConfig.id === 'max_orders' 
-        ? `${API_URL}/admin/config/delivery/max-orders`
-        : `${API_URL}/admin/config/delivery/max-distance`;
-
-      const bodyKey = selectedConfig.id === 'max_orders'
-        ? 'max_orders'
-        : 'max_distance';
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(`${API_URL}/admin/config/${selectedConfig.key}`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          [bodyKey]: editValue
+          value: editValue
         })
       });
 
@@ -184,8 +322,8 @@ export default function ConfigManagement() {
       const data = await response.json();
 
       if (data.success) {
-        setSuccess(`${selectedConfig.title} mis à jour avec succès!`);
-        await fetchConfig();
+        setSuccess(`${selectedMetadata.title} mis à jour avec succès!`);
+        await fetchAllConfigs();
         handleCloseModal();
         
         // Clear success message after 3 seconds
@@ -202,47 +340,98 @@ export default function ConfigManagement() {
   };
 
   const getColorClasses = (color: string) => {
-    const colors: Record<string, { bg: string; text: string; border: string; hover: string }> = {
+    const colors: Record<string, { bg: string; text: string; border: string; hover: string; progress: string }> = {
       blue: {
         bg: 'bg-blue-50',
         text: 'text-blue-600',
         border: 'border-blue-200',
-        hover: 'hover:bg-blue-100'
+        hover: 'hover:bg-blue-100',
+        progress: 'bg-blue-500'
       },
       green: {
         bg: 'bg-green-50',
         text: 'text-green-600',
         border: 'border-green-200',
-        hover: 'hover:bg-green-100'
+        hover: 'hover:bg-green-100',
+        progress: 'bg-green-500'
+      },
+      yellow: {
+        bg: 'bg-yellow-50',
+        text: 'text-yellow-600',
+        border: 'border-yellow-200',
+        hover: 'hover:bg-yellow-100',
+        progress: 'bg-yellow-500'
+      },
+      orange: {
+        bg: 'bg-orange-50',
+        text: 'text-orange-600',
+        border: 'border-orange-200',
+        hover: 'hover:bg-orange-100',
+        progress: 'bg-orange-500'
+      },
+      red: {
+        bg: 'bg-red-50',
+        text: 'text-red-600',
+        border: 'border-red-200',
+        hover: 'hover:bg-red-100',
+        progress: 'bg-red-500'
+      },
+      purple: {
+        bg: 'bg-purple-50',
+        text: 'text-purple-600',
+        border: 'border-purple-200',
+        hover: 'hover:bg-purple-100',
+        progress: 'bg-purple-500'
       }
     };
     return colors[color] || colors.blue;
   };
 
+  // Organiser les configurations par catégories
+  const organizedConfigs: ConfigCategory[] = Object.entries(configs).map(([categoryKey, configsList]) => {
+    const category = categoryInfo[categoryKey] || categoryInfo.platform;
+    const Icon = category.icon;
+    const colors = getColorClasses(category.color);
+
+    return {
+      name: categoryKey,
+      title: category.title,
+      icon: Icon,
+      color: category.color,
+      configs: configsList
+        .map(config => {
+          const metadata = configMetadata[config.key];
+          return metadata ? { ...config, metadata } : null;
+        })
+        .filter((c): c is ConfigItem & { metadata: ConfigMetadata } => c !== null) as any
+    };
+  }).filter(cat => cat.configs.length > 0);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-3">
-                
+                <Settings className="w-8 h-8 text-purple-600" />
                 <div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                  <h1 className="text-2xl font-bold text-gray-900">
                     Configuration du Système
                   </h1>
                   <p className="text-sm text-gray-500 mt-1">
-                    Gérez les paramètres de livraison
+                    Gérez tous les paramètres de la plateforme
                   </p>
                 </div>
               </div>
             </div>
             <button
-              onClick={fetchConfig}
+              onClick={fetchAllConfigs}
               disabled={loading}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm sm:text-base w-full sm:w-auto"
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               {loading ? 'Chargement...' : 'Actualiser'}
             </button>
           </div>
@@ -259,7 +448,7 @@ export default function ConfigManagement() {
           )}
 
           {/* Error Message */}
-          {error && (
+          {error && !showModal && (
             <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -278,82 +467,111 @@ export default function ConfigManagement() {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
           </div>
+        ) : organizedConfigs.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-12 text-center">
+            <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Aucune configuration trouvée
+            </h3>
+            <p className="text-sm text-gray-500">
+              Les configurations seront créées automatiquement lors de l'initialisation
+            </p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {configItems.map((item) => {
-              const colors = getColorClasses(item.color);
-              const Icon = item.icon;
-              
+          <div className="space-y-8">
+            {organizedConfigs.map((category) => {
+              const CategoryIcon = category.icon;
+              const colors = getColorClasses(category.color);
+
               return (
-                <div
-                  key={item.id}
-                  className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-                >
-                  {/* Card Header */}
-                  <div className={`${colors.bg} ${colors.border} border-b px-4 sm:px-6 py-4`}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        <div className={`p-2 ${colors.bg} rounded-lg border ${colors.border}`}>
-                          <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${colors.text}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words">
-                            {item.title}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
-                            {item.description}
-                          </p>
-                        </div>
+                <div key={category.name} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                  {/* Category Header */}
+                  <div className={`${colors.bg} ${colors.border} border-b px-6 py-4`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 ${colors.bg} rounded-lg border ${colors.border}`}>
+                        <CategoryIcon className={`w-6 h-6 ${colors.text}`} />
                       </div>
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className={`flex-shrink-0 p-2 ${colors.bg} ${colors.hover} rounded-lg border ${colors.border} transition-colors`}
-                        title="Modifier"
-                      >
-                        <Edit className={`w-4 h-4 ${colors.text}`} />
-                      </button>
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">
+                          {category.title}
+                        </h2>
+                        <p className="text-sm text-gray-600">
+                          {category.configs.length} configuration{category.configs.length > 1 ? 's' : ''}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Card Body */}
-                  <div className="px-4 sm:px-6 py-6">
-                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-                      <div>
-                        <p className="text-xs sm:text-sm text-gray-500 mb-2">Valeur actuelle</p>
-                        <div className="flex items-baseline gap-2">
-                          <span className={`text-3xl sm:text-4xl font-bold ${colors.text}`}>
-                            {item.value}
-                          </span>
-                          <span className="text-base sm:text-lg text-gray-600">
-                            {item.unit}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
-                        <TrendingUp className="w-4 h-4" />
-                        <span>Min: {item.min} • Max: {item.max}</span>
-                      </div>
-                    </div>
+                  {/* Configs Grid */}
+                  <div className="p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {category.configs.map((config: ConfigItem & { metadata?: ConfigMetadata }) => {
+                        const metadata = config.metadata || configMetadata[config.key];
+                        if (!metadata) return null;
+                        const ConfigIcon = metadata.icon;
+                        const configColors = getColorClasses(metadata.color);
 
-                    {/* Progress Bar */}
-                    <div className="mt-6">
-                      <div className="flex justify-between text-xs text-gray-500 mb-2">
-                        <span>{item.min}</span>
-                        <span>{item.max}</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all duration-300 ${colors.text.replace('text', 'bg')}`}
-                          style={{
-                            width: `${((item.value - item.min) / (item.max - item.min)) * 100}%`
-                          }}
-                        />
-                      </div>
+                        return (
+                          <div
+                            key={config.key}
+                            className="bg-gray-50 rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <div className={`p-2 ${configColors.bg} rounded-lg border ${configColors.border} flex-shrink-0`}>
+                                  <ConfigIcon className={`w-5 h-5 ${configColors.text}`} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-sm font-semibold text-gray-900 break-words">
+                                    {metadata.title}
+                                  </h3>
+                                  <p className="text-xs text-gray-600 mt-1 break-words">
+                                    {metadata.description}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleEdit(config)}
+                                className={`flex-shrink-0 p-2 ${configColors.bg} ${configColors.hover} rounded-lg border ${configColors.border} transition-colors`}
+                                title="Modifier"
+                              >
+                                <Edit className={`w-4 h-4 ${configColors.text}`} />
+                              </button>
+                            </div>
+
+                            {/* Value Display */}
+                            <div className="mb-3">
+                              <div className="flex items-baseline gap-2">
+                                <span className={`text-2xl font-bold ${configColors.text}`}>
+                                  {config.value}
+                                </span>
+                                <span className="text-sm text-gray-600">
+                                  {metadata.unit}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                                <Info className="w-3 h-3" />
+                                <span>Min: {metadata.min} • Max: {metadata.max}</span>
+                              </div>
+                            </div>
+
+                            {/* Progress Bar */}
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div
+                                className={`h-1.5 rounded-full transition-all duration-300 ${configColors.progress}`}
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, ((Number(config.value) - metadata.min) / (metadata.max - metadata.min)) * 100))}%`
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -364,12 +582,12 @@ export default function ConfigManagement() {
       </div>
 
       {/* Edit Modal */}
-      {showModal && selectedConfig && modalType === 'edit' && (
+      {showModal && selectedConfig && selectedMetadata && modalType === 'edit' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <h2 className="text-xl font-bold text-gray-900">
                 Modifier la Configuration
               </h2>
               <button
@@ -381,23 +599,23 @@ export default function ConfigManagement() {
             </div>
 
             {/* Content */}
-            <div className="px-4 sm:px-6 py-6">
+            <div className="px-6 py-6">
               <div className="space-y-6">
                 {/* Config Info */}
-                <div className={`${getColorClasses(selectedConfig.color).bg} ${getColorClasses(selectedConfig.color).border} border rounded-lg p-4`}>
+                <div className={`${getColorClasses(selectedMetadata.color).bg} ${getColorClasses(selectedMetadata.color).border} border rounded-lg p-4`}>
                   <div className="flex items-start gap-3">
-                    <div className={`p-2 bg-white rounded-lg`}>
+                    <div className="p-2 bg-white rounded-lg">
                       {(() => {
-                        const Icon = selectedConfig.icon;
-                        return <Icon className={`w-5 h-5 ${getColorClasses(selectedConfig.color).text}`} />;
+                        const Icon = selectedMetadata.icon;
+                        return <Icon className={`w-5 h-5 ${getColorClasses(selectedMetadata.color).text}`} />;
                       })()}
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base">
-                        {selectedConfig.title}
+                      <h3 className="font-semibold text-gray-900">
+                        {selectedMetadata.title}
                       </h3>
-                      <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                        {selectedConfig.description}
+                      <p className="text-sm text-gray-600 mt-1">
+                        {selectedMetadata.description}
                       </p>
                     </div>
                   </div>
@@ -413,39 +631,40 @@ export default function ConfigManagement() {
                       type="number"
                       value={editValue}
                       onChange={(e) => setEditValue(Number(e.target.value))}
-                      min={selectedConfig.min}
-                      max={selectedConfig.max}
+                      min={selectedMetadata.min}
+                      max={selectedMetadata.max}
+                      step={selectedMetadata.unit === '%' ? 0.1 : 1}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">
-                      {selectedConfig.unit}
+                      {selectedMetadata.unit}
                     </span>
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-2">
-                    Valeur actuelle: <strong>{selectedConfig.value}</strong> {selectedConfig.unit}
+                  <p className="text-sm text-gray-500 mt-2">
+                    Valeur actuelle: <strong>{selectedConfig.value}</strong> {selectedMetadata.unit}
                   </p>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                    Plage autorisée: {selectedConfig.min} - {selectedConfig.max}
+                  <p className="text-sm text-gray-500 mt-1">
+                    Plage autorisée: {selectedMetadata.min} - {selectedMetadata.max} {selectedMetadata.unit}
                   </p>
                 </div>
 
                 {/* Preview */}
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                  <p className="text-xs sm:text-sm text-gray-600 mb-3">Aperçu</p>
+                  <p className="text-sm text-gray-600 mb-3">Aperçu</p>
                   <div className="flex items-baseline gap-2">
-                    <span className={`text-2xl sm:text-3xl font-bold ${getColorClasses(selectedConfig.color).text}`}>
+                    <span className={`text-3xl font-bold ${getColorClasses(selectedMetadata.color).text}`}>
                       {editValue}
                     </span>
                     <span className="text-base text-gray-600">
-                      {selectedConfig.unit}
+                      {selectedMetadata.unit}
                     </span>
                   </div>
                   <div className="mt-3">
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-2 rounded-full transition-all duration-300 ${getColorClasses(selectedConfig.color).text.replace('text', 'bg')}`}
+                        className={`h-2 rounded-full transition-all duration-300 ${getColorClasses(selectedMetadata.color).progress}`}
                         style={{
-                          width: `${Math.min(100, Math.max(0, ((editValue - selectedConfig.min) / (selectedConfig.max - selectedConfig.min)) * 100))}%`
+                          width: `${Math.min(100, Math.max(0, ((editValue - selectedMetadata.min) / (selectedMetadata.max - selectedMetadata.min)) * 100))}%`
                         }}
                       />
                     </div>
@@ -456,25 +675,25 @@ export default function ConfigManagement() {
                 {error && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs sm:text-sm text-red-700">{error}</p>
+                    <p className="text-sm text-red-700">{error}</p>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Footer */}
-            <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-col-reverse sm:flex-row justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={handleCloseModal}
                 disabled={saveLoading}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 text-sm sm:text-base"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
               >
                 Annuler
               </button>
               <button
                 onClick={handleSave}
                 disabled={saveLoading}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {saveLoading ? (
                   <>

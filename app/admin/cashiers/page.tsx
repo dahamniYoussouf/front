@@ -27,6 +27,14 @@ type Permissions = {
   can_view_reports: boolean;
 };
 
+const defaultPermissions: Permissions = {
+  can_create_orders: true,
+  can_cancel_orders: false,
+  can_apply_discounts: false,
+  can_process_refunds: false,
+  can_view_reports: false,
+};
+
 interface Cashier {
   id: string;
   user_id: string;
@@ -82,13 +90,7 @@ export default function CashierManagement() {
     last_name: '',
     phone: '',
     restaurant_id: '',
-    permissions: {
-      can_create_orders: true,
-      can_cancel_orders: false,
-      can_apply_discounts: false,
-      can_process_refunds: false,
-      can_view_reports: false,
-    },
+    permissions: { ...defaultPermissions },
   });
 
   const [editForm, setEditForm] = useState<Partial<Cashier>>({});
@@ -149,13 +151,7 @@ export default function CashierManagement() {
       last_name: '',
       phone: '',
       restaurant_id: '',
-      permissions: {
-        can_create_orders: true,
-        can_cancel_orders: false,
-        can_apply_discounts: false,
-        can_process_refunds: false,
-        can_view_reports: false,
-      },
+      permissions: { ...defaultPermissions },
     });
     setEditForm({});
   };
@@ -474,9 +470,9 @@ export default function CashierManagement() {
                         onChange={(e) => setEditForm({
                           ...editForm,
                           permissions: {
-                            ...(editForm.permissions || selectedCashier.permissions),
+                            ...(editForm.permissions || selectedCashier.permissions || defaultPermissions),
                             [key]: e.target.checked,
-                          },
+                          } as Permissions,
                         })}
                       />
                       <span>{key}</span>

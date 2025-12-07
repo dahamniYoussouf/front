@@ -12,7 +12,10 @@ import {
   Mail,
   Calendar,
   Plus,
-  RefreshCw
+  RefreshCw,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -98,6 +101,11 @@ export default function CashierManagement() {
   useEffect(() => {
     fetchCashiers();
   }, [currentPage, pageSize, searchTerm, filterStatus]);
+
+  // Réinitialiser à la page 1 quand la recherche ou le filtre change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus]);
 
   const fetchCashiers = async () => {
     try {
@@ -269,231 +277,770 @@ export default function CashierManagement() {
 
   const renderStatusBadge = (status: CashierStatus) => {
     const colors: Record<string, string> = {
-      active: 'bg-green-100 text-green-700',
-      on_break: 'bg-yellow-100 text-yellow-700',
-      offline: 'bg-gray-100 text-gray-700',
-      suspended: 'bg-red-100 text-red-700',
+      active: 'bg-green-100 text-green-800',
+      on_break: 'bg-yellow-100 text-yellow-800',
+      offline: 'bg-gray-100 text-gray-800',
+      suspended: 'bg-red-100 text-red-800',
     };
-    return <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colors[status] || 'bg-gray-100 text-gray-700'}`}>{status}</span>;
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+        {status === 'active' && '🟢'}
+        {status === 'on_break' && '🟡'}
+        {status === 'offline' && '⚫'}
+        {status === 'suspended' && '🔴'}
+        {' '}
+        {status === 'active' && 'Actif'}
+        {status === 'on_break' && 'En pause'}
+        {status === 'offline' && 'Hors ligne'}
+        {status === 'suspended' && 'Suspendu'}
+      </span>
+    );
   };
 
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
+  const showingTo = Math.min(startIndex + cashiers.length, totalCount);
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Caissiers</h1>
-          <p className="text-gray-500">Recherche, filtres et gestion des caissiers</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => openModal('create')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-          >
-            <Plus size={16} /> Nouveau caissier
-          </button>
-          <button
-            onClick={fetchCashiers}
-            className="inline-flex items-center gap-2 px-3 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
-          >
-            <RefreshCw size={16} /> Rafra?chir
-          </button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={searchTerm}
-            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-            placeholder="Rechercher nom, email ou t?l?phone"
-            className="pl-9 pr-3 py-2 border rounded-lg min-w-[260px]"
-          />
-        </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => { setFilterStatus(e.target.value as any); setCurrentPage(1); }}
-          className="border rounded-lg px-3 py-2"
-        >
-          <option value="all">Tous les statuts</option>
-          <option value="active">Actif</option>
-          <option value="on_break">En pause</option>
-          <option value="offline">Hors ligne</option>
-          <option value="suspended">Suspendu</option>
-        </select>
-      </div>
-
-      {error && (
-        <div className="p-3 rounded-md bg-red-50 text-red-700 border border-red-200">{error}</div>
-      )}
-
-      <div className="bg-white rounded-xl shadow-sm border">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left">Nom</th>
-                <th className="px-4 py-3 text-left">Contact</th>
-                <th className="px-4 py-3 text-left">Code</th>
-                <th className="px-4 py-3 text-left">Restaurant</th>
-                <th className="px-4 py-3 text-left">Statut</th>
-                <th className="px-4 py-3 text-left">Actif</th>
-                <th className="px-4 py-3 text-left">Commandes</th>
-                <th className="px-4 py-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-6 text-gray-500">Chargement...</td>
-                </tr>
-              ) : cashiers.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-6 text-gray-500">Aucun caissier</td>
-                </tr>
-              ) : (
-                cashiers.map((c) => (
-                  <tr key={c.id} className="border-t">
-                    <td className="px-4 py-3 font-medium">{c.first_name} {c.last_name}</td>
-                    <td className="px-4 py-3 space-y-1">
-                      {c.email && <div className="flex items-center gap-2 text-gray-700"><Mail size={14}/>{c.email}</div>}
-                      <div className="flex items-center gap-2 text-gray-700"><Phone size={14}/>{c.phone}</div>
-                    </td>
-                    <td className="px-4 py-3">{c.cashier_code}</td>
-                    <td className="px-4 py-3 text-gray-700">{c.restaurant_id}</td>
-                    <td className="px-4 py-3">{renderStatusBadge(c.status)}</td>
-                    <td className="px-4 py-3">{c.is_active ? <span className="text-emerald-600 font-semibold">Oui</span> : <span className="text-gray-500">Non</span>}</td>
-                    <td className="px-4 py-3 text-gray-700">{c.total_orders_processed ?? 0}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openModal('view', c)} className="p-1 text-gray-600 hover:text-emerald-600"><Eye size={16}/></button>
-                        <button onClick={() => openModal('edit', c)} className="p-1 text-gray-600 hover:text-emerald-600"><Edit size={16}/></button>
-                        <button onClick={() => openModal('delete', c)} className="p-1 text-gray-600 hover:text-red-600"><Trash2 size={16}/></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between px-4 py-3 text-sm text-gray-600">
-          <div className="flex items-center gap-2">
-            <span>Page {currentPage} / {totalPages} ? {totalCount} r?sultat(s)</span>
-            <button disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} className="px-2 py-1 border rounded disabled:opacity-50">Pr?c.</button>
-            <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="px-2 py-1 border rounded disabled:opacity-50">Suiv.</button>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Gestion des Caissiers</h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {totalCount} caissier{totalCount !== 1 ? 's' : ''} trouvé{totalCount !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openModal('create')}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors"
+              >
+                <Plus size={16} /> Nouveau caissier
+              </button>
+              <button
+                onClick={fetchCashiers}
+                disabled={loading}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> {loading ? 'Chargement...' : 'Actualiser'}
+              </button>
+            </div>
           </div>
-          <select value={pageSize} onChange={(e) => { setPageSize(parseInt(e.target.value)); setCurrentPage(1); }} className="border rounded px-2 py-1">
-            {[10, 20, 50].map((s) => <option key={s} value={s}>{s}/page</option>)}
-          </select>
+
+          {/* Message d'erreur global */}
+          {error && (
+            <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-800 dark:text-red-300">Erreur</p>
+                <p className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Barre de recherche et filtres */}
+          <div className="mt-6 flex flex-col lg:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher par nom, email ou téléphone..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+              />
+            </div>
+            <select
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value as any); setCurrentPage(1); }}
+              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="active">Actifs</option>
+              <option value="on_break">En pause</option>
+              <option value="offline">Hors ligne</option>
+              <option value="suspended">Suspendus</option>
+            </select>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">Par page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(parseInt(e.target.value)); setCurrentPage(1); }}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+              >
+                {[10, 20, 50].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 relative">
-            <button className="absolute right-4 top-4 text-gray-500" onClick={resetAndClose}>?</button>
-
-            {modalType === 'create' && (
-              <>
-                <h3 className="text-xl font-semibold mb-4">Nouveau caissier</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input className="border rounded px-3 py-2" placeholder="Pr?nom" value={createForm.first_name} onChange={(e) => setCreateForm({ ...createForm, first_name: e.target.value })} />
-                  <input className="border rounded px-3 py-2" placeholder="Nom" value={createForm.last_name} onChange={(e) => setCreateForm({ ...createForm, last_name: e.target.value })} />
-                  <input className="border rounded px-3 py-2" placeholder="Email" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} />
-                  <input className="border rounded px-3 py-2" placeholder="T?l?phone" value={createForm.phone} onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })} />
-                  <input className="border rounded px-3 py-2" placeholder="Mot de passe" type="password" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} />
-                  <input className="border rounded px-3 py-2" placeholder="Restaurant ID" value={createForm.restaurant_id} onChange={(e) => setCreateForm({ ...createForm, restaurant_id: e.target.value })} />
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  {Object.keys(createForm.permissions).map((key) => (
-                    <label key={key} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={(createForm.permissions as any)[key]}
-                        onChange={(e) => setCreateForm({
-                          ...createForm,
-                          permissions: { ...createForm.permissions, [key]: e.target.checked },
-                        })}
-                      />
-                      <span>{key}</span>
-                    </label>
+      {/* Contenu principal */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Caissier
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Contact
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Code
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Restaurant
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Statut
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Commandes
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Inscription
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {cashiers.map((c) => (
+                    <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <img
+                            src={
+                              c.profile_image_url ||
+                              `https://ui-avatars.com/api/?name=${c.first_name}+${c.last_name}&background=16a34a&color=fff`
+                            }
+                            alt={`${c.first_name} ${c.last_name}`}
+                            className="w-10 h-10 rounded-full"
+                          />
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">
+                              {c.first_name} {c.last_name}
+                            </div>
+                            <div className="text-xs text-gray-500 font-mono mt-1">
+                              {c.cashier_code}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {c.is_active ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                  <UserCheck className="w-3 h-3 mr-1" />
+                                  Actif
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                  <UserX className="w-3 h-3 mr-1" />
+                                  Inactif
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {c.email && (
+                            <div className="flex items-center gap-2 mb-1">
+                              <Mail className="w-4 h-4 text-gray-400" />
+                              {c.email}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <Phone className="w-4 h-4 text-gray-400" />
+                            {c.phone}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-mono text-gray-900">{c.cashier_code}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{c.restaurant_id}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {renderStatusBadge(c.status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-semibold text-green-600">
+                          {c.total_orders_processed ?? 0}
+                        </div>
+                        {c.total_sales_amount && (
+                          <div className="text-xs text-gray-500">
+                            {c.total_sales_amount} DA
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {c.created_at && (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            {formatDate(c.created_at)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => openModal('view', c)}
+                            className="text-gray-600 hover:text-gray-900 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                            title="Voir les détails"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => openModal('edit', c)}
+                            className="text-blue-600 hover:text-blue-900 p-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+                            title="Modifier"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => openModal('delete', c)}
+                            className="text-red-600 hover:text-red-900 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-                <div className="mt-4 flex justify-end gap-2">
-                  <button onClick={resetAndClose} className="px-3 py-2 border rounded">Annuler</button>
-                  <button onClick={handleCreate} disabled={saveLoading} className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50">{saveLoading ? 'Enregistrement...' : 'Cr?er'}</button>
-                </div>
-              </>
-            )}
+                </tbody>
+              </table>
+            </div>
 
-            {modalType === 'view' && selectedCashier && (
-              <div className="space-y-3">
-                <h3 className="text-xl font-semibold">D?tails caissier</h3>
-                <p className="text-gray-700">{selectedCashier.first_name} {selectedCashier.last_name} ? {selectedCashier.cashier_code}</p>
-                <p className="text-gray-700 flex items-center gap-2"><Mail size={16}/>{selectedCashier.email}</p>
-                <p className="text-gray-700 flex items-center gap-2"><Phone size={16}/>{selectedCashier.phone}</p>
-                <p className="text-gray-700">Restaurant: {selectedCashier.restaurant_id}</p>
-                <p className="text-gray-700">Statut: {renderStatusBadge(selectedCashier.status)}</p>
-                <p className="text-gray-700">Actif: {selectedCashier.is_active ? 'Oui' : 'Non'}</p>
-                <p className="text-gray-700">Commandes trait?es: {selectedCashier.total_orders_processed ?? 0}</p>
-                {selectedCashier.total_sales_amount && <p className="text-gray-700">Chiffre d'affaires: {selectedCashier.total_sales_amount} DA</p>}
-                <p className="text-gray-700">Permissions: {selectedCashier.permissions ? Object.keys(selectedCashier.permissions).filter(k => (selectedCashier.permissions as any)[k]).join(', ') : 'N/A'}</p>
+            {cashiers.length === 0 && (
+              <div className="text-center py-12">
+                <UserX className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-sm font-medium text-gray-900">
+                  Aucun caissier trouvé
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Essayez de modifier vos critères de recherche
+                </p>
               </div>
             )}
 
-            {modalType === 'edit' && selectedCashier && (
-              <>
-                <h3 className="text-xl font-semibold mb-4">Modifier caissier</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input className="border rounded px-3 py-2" placeholder="Pr?nom" value={editForm.first_name || ''} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} />
-                  <input className="border rounded px-3 py-2" placeholder="Nom" value={editForm.last_name || ''} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} />
-                  <input className="border rounded px-3 py-2" placeholder="Email" value={editForm.email || ''} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
-                  <input className="border rounded px-3 py-2" placeholder="T?l?phone" value={editForm.phone || ''} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
-                  <select className="border rounded px-3 py-2" value={editForm.status || 'offline'} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
-                    <option value="active">Actif</option>
-                    <option value="on_break">En pause</option>
-                    <option value="offline">Hors ligne</option>
-                    <option value="suspended">Suspendu</option>
-                  </select>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={!!editForm.is_active} onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })} />
-                    Compte actif
-                  </label>
+            {totalCount > 0 && (
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Affichage de <span className="font-medium">{showingFrom}</span> à{' '}
+                  <span className="font-medium">{showingTo}</span>{' '}
+                  sur <span className="font-medium">{totalCount}</span> caissier
+                  {totalCount !== 1 ? 's' : ''}
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  {selectedCashier.permissions && Object.keys(selectedCashier.permissions).map((key) => (
-                    <label key={key} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={(editForm.permissions as any)?.[key] ?? (selectedCashier.permissions as any)[key]}
-                        onChange={(e) => setEditForm({
-                          ...editForm,
-                          permissions: {
-                            ...(editForm.permissions || selectedCashier.permissions || defaultPermissions),
-                            [key]: e.target.checked,
-                          } as Permissions,
-                        })}
-                      />
-                      <span>{key}</span>
-                    </label>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Précédent</span>
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                            currentPage === pageNum
+                              ? 'bg-green-600 text-white'
+                              : 'border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                    }
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+                  >
+                    <span className="hidden sm:inline">Suivant</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="mt-4 flex justify-end gap-2">
-                  <button onClick={resetAndClose} className="px-3 py-2 border rounded">Annuler</button>
-                  <button onClick={handleUpdate} disabled={saveLoading} className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50">{saveLoading ? 'Sauvegarde...' : 'Enregistrer'}</button>
-                </div>
-              </>
+              </div>
             )}
+          </div>
+        )}
+      </div>
 
-            {modalType === 'delete' && selectedCashier && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-red-600">Supprimer ce caissier ?</h3>
-                <p className="text-gray-700">{selectedCashier.first_name} {selectedCashier.last_name} ? {selectedCashier.cashier_code}</p>
-                <div className="flex justify-end gap-2">
-                  <button onClick={resetAndClose} className="px-3 py-2 border rounded">Annuler</button>
-                  <button onClick={handleDelete} disabled={saveLoading} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">{saveLoading ? 'Suppression...' : 'Supprimer'}</button>
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <h2 className="text-xl font-bold text-gray-900">
+                {modalType === 'create' && 'Créer un Nouveau Caissier'}
+                {modalType === 'view' && 'Détails du Caissier'}
+                {modalType === 'edit' && 'Modifier le Caissier'}
+                {modalType === 'delete' && 'Confirmer la Suppression'}
+              </h2>
+              <button
+                onClick={resetAndClose}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4">
+
+              {modalType === 'create' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Prénom <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Prénom"
+                        value={createForm.first_name}
+                        onChange={(e) => setCreateForm({ ...createForm, first_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nom <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Nom"
+                        value={createForm.last_name}
+                        onChange={(e) => setCreateForm({ ...createForm, last_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Email"
+                        value={createForm.email}
+                        onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Téléphone <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Téléphone"
+                        value={createForm.phone}
+                        onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Mot de passe <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="password"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Mot de passe"
+                        value={createForm.password}
+                        onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Restaurant ID <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Restaurant ID"
+                        value={createForm.restaurant_id}
+                        onChange={(e) => setCreateForm({ ...createForm, restaurant_id: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Permissions
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.keys(createForm.permissions).map((key) => (
+                        <label key={key} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={(createForm.permissions as any)[key]}
+                            onChange={(e) => setCreateForm({
+                              ...createForm,
+                              permissions: { ...createForm.permissions, [key]: e.target.checked },
+                            })}
+                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                          />
+                          <span>{key.replace(/_/g, ' ')}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {modalType === 'delete' && selectedCashier ? (
+                <div className="text-center py-4">
+                  <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                    <Trash2 className="h-6 w-6 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Êtes-vous sûr de vouloir supprimer ce caissier ?
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-2">
+                    <strong>{selectedCashier.first_name} {selectedCashier.last_name}</strong> ({selectedCashier.cashier_code})
+                  </p>
+                  <p className="text-sm text-gray-500 mb-6">
+                    Cette action est irréversible. Toutes les données du caissier
+                    seront supprimées.
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={resetAndClose}
+                      disabled={saveLoading}
+                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={saveLoading}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {saveLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Suppression...
+                        </>
+                      ) : (
+                        'Supprimer'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : modalType === 'view' && selectedCashier ? (
+                <div className="space-y-6">
+                  {/* Photo de profil */}
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={
+                        selectedCashier.profile_image_url ||
+                        `https://ui-avatars.com/api/?name=${selectedCashier.first_name}+${selectedCashier.last_name}&background=16a34a&color=fff`
+                      }
+                      alt={`${selectedCashier.first_name} ${selectedCashier.last_name}`}
+                      className="w-20 h-20 rounded-full"
+                    />
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {selectedCashier.first_name} {selectedCashier.last_name}
+                      </h3>
+                      <p className="text-sm text-gray-500 font-mono">
+                        {selectedCashier.cashier_code}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {selectedCashier.is_active ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <UserCheck className="w-3 h-3 mr-1" />
+                            Compte actif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            <UserX className="w-3 h-3 mr-1" />
+                            Compte inactif
+                          </span>
+                        )}
+                        {renderStatusBadge(selectedCashier.status)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Informations */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Prénom
+                      </label>
+                      <p className="text-sm text-gray-900">{selectedCashier.first_name}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nom
+                      </label>
+                      <p className="text-sm text-gray-900">{selectedCashier.last_name}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <p className="text-sm text-gray-900 flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-gray-400" />
+                        {selectedCashier.email || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Téléphone
+                      </label>
+                      <p className="text-sm text-gray-900 flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        {selectedCashier.phone}
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Restaurant ID
+                      </label>
+                      <p className="text-sm text-gray-900">{selectedCashier.restaurant_id}</p>
+                    </div>
+                  </div>
+
+                  {/* Statistiques */}
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {selectedCashier.total_orders_processed ?? 0}
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Commandes traitées
+                      </div>
+                    </div>
+                    {selectedCashier.total_sales_amount && (
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {selectedCashier.total_sales_amount} DA
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          Chiffre d'affaires
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Permissions */}
+                  {selectedCashier.permissions && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Permissions
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(selectedCashier.permissions).map(([key, value]) => (
+                          value && (
+                            <span
+                              key={key}
+                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                            >
+                              {key.replace(/_/g, ' ')}
+                            </span>
+                          )
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {modalType === 'edit' && selectedCashier && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Prénom
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Prénom"
+                        value={editForm.first_name || ''}
+                        onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nom
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Nom"
+                        value={editForm.last_name || ''}
+                        onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Email"
+                        value={editForm.email || ''}
+                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Téléphone
+                      </label>
+                      <input
+                        type="tel"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Téléphone"
+                        value={editForm.phone || ''}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Statut
+                      </label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        value={editForm.status || 'offline'}
+                        onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                      >
+                        <option value="active">Actif</option>
+                        <option value="on_break">En pause</option>
+                        <option value="offline">Hors ligne</option>
+                        <option value="suspended">Suspendu</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-4 pt-6">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!!editForm.is_active}
+                          onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
+                          className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Compte actif</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Permissions
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {selectedCashier.permissions && Object.keys(selectedCashier.permissions).map((key) => (
+                        <label key={key} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={(editForm.permissions as any)?.[key] ?? (selectedCashier.permissions as any)[key]}
+                            onChange={(e) => setEditForm({
+                              ...editForm,
+                              permissions: {
+                                ...(editForm.permissions || selectedCashier.permissions || defaultPermissions),
+                                [key]: e.target.checked,
+                              } as Permissions,
+                            })}
+                            className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                          />
+                          <span>{key.replace(/_/g, ' ')}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {modalType !== 'delete' && (
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={resetAndClose}
+                  disabled={saveLoading}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                >
+                  {modalType === 'view' ? 'Fermer' : 'Annuler'}
+                </button>
+                {modalType === 'create' && (
+                  <button
+                    onClick={handleCreate}
+                    disabled={saveLoading}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {saveLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Enregistrement...
+                      </>
+                    ) : (
+                      'Créer'
+                    )}
+                  </button>
+                )}
+                {modalType === 'edit' && (
+                  <button
+                    onClick={handleUpdate}
+                    disabled={saveLoading}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {saveLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Enregistrement...
+                      </>
+                    ) : (
+                      'Enregistrer'
+                    )}
+                  </button>
+                )}
               </div>
             )}
 

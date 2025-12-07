@@ -90,3 +90,8 @@ export default function Loader({ message = 'Chargement...', fullScreen = true }:
   );
 }
 
+
+
+
+
+

@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart, User, Moon, Sun, Map, Database } from 'lucide-react';
+import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart, User, Moon, Sun, Map, Database, UserCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import NotificationPopupWrapper from '@/components/NotificationPopupWrapper';
@@ -60,6 +60,12 @@ export default function AdminLayout({
       icon: Truck,
       href: '/admin/livreurs',
       path: '/admin/livreurs'
+    },
+    {
+      title: 'Gestion Caissiers',
+      icon: UserCheck,
+      href: '/admin/cashiers',
+      path: '/admin/cashiers'
     },
     {
       title: 'Gestion Admins',

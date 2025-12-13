@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, UtensilsCrossed, Users, Truck, ClipboardList, Settings, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart, User, Moon, Sun, Map, Database, UserCheck } from 'lucide-react';
+import { Home, UtensilsCrossed, Users, Truck, ClipboardList, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart, User, Moon, Sun, Map, Database, UserCheck, Activity, Settings } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import NotificationPopupWrapper from '@/components/NotificationPopupWrapper';
@@ -36,6 +36,12 @@ export default function AdminLayout({
       icon: Home,
       href: '/admin/dashboard',
       path: '/admin/dashboard'
+    },
+    {
+      title: 'Monitoring',
+      icon: Activity,
+      href: '/admin/monitoring',
+      path: '/admin/monitoring'
     },
     {
       title: 'Gestion Restaurants',
@@ -126,6 +132,7 @@ export default function AdminLayout({
   const getBreadcrumb = (pathname: string) => {
     const routes: Record<string, string> = {
       '/admin/dashboard': 'Tableau de Bord',
+      '/admin/monitoring': 'Monitoring',
       '/admin/restaurants': 'Gestion des Restaurants',
       '/admin/clients': 'Gestion des Clients',
       '/admin/favories': 'Favoris des Clients',
@@ -249,11 +256,7 @@ export default function AdminLayout({
                 <Moon className="w-5 h-5" />
               )}
             </button>
-            
-            <button className="p-2 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
-              <Settings className="w-5 h-5" />
-            </button>
-            
+
             {/* User Avatar */}
             <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-200 dark:bg-slate-700 rounded-full flex items-center justify-center border-2 border-gray-300 dark:border-slate-600">
               <span className="text-xs md:text-sm font-semibold text-gray-700 dark:text-slate-200">AD</span>

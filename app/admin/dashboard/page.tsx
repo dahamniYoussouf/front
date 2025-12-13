@@ -1,20 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  Users, 
-  ShoppingBag, 
-  Store, 
-  TrendingUp, 
-  Clock,
-  CheckCircle,
-  XCircle,
-  Truck,
-  Banknote ,
+import Image from 'next/image';
+import {
+  ShoppingBag,
+  Store,
+  TrendingUp,
+  Banknote,
   AlertCircle,
   RefreshCw,
   LogOut,
-  Bell
+  Bell,
+  Truck,
+  Clock3,
+  UserCheck
 } from 'lucide-react';
 
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -68,8 +67,6 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('🔍 Dashboard mounted');
-    console.log('👤 User:', user);
     fetchDashboardStats();
   }, [user]);
 
@@ -78,73 +75,51 @@ export default function AdminDashboard() {
       setLoading(true);
       setError(null);
 
-      // Try both token keys for compatibility
       const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-      
       if (!token) {
-        console.error('❌ No token found');
         setError('Session expirée. Veuillez vous reconnecter.');
         setTimeout(() => {
           logout();
           router.push('/login');
-        }, 2000);
+        }, 1200);
         return;
       }
 
-      console.log('🔑 Token found:', token.substring(0, 20) + '...');
-
       const headers = {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       };
 
       const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-      console.log('🌐 Base URL:', baseURL);
-
-      // Fetch statistics from backend endpoint
-      console.log('📊 Fetching statistics from backend...');
       const statsRes = await fetch(`${baseURL}/admin/statistics`, { headers });
 
-      console.log('📡 Response status:', statsRes.status);
-
-      // Check for authentication errors
       if (statsRes.status === 401) {
-        console.error('❌ 401 Unauthorized');
         setError('Session expirée. Redirection...');
         setTimeout(() => {
           logout();
           router.push('/login');
-        }, 2000);
+        }, 1200);
         return;
       }
 
-      // Check if response is JSON
       const contentType = statsRes.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
-        console.error('❌ Response is not JSON:', contentType);
         const text = await statsRes.text();
-        console.error('Response preview:', text.substring(0, 200));
-        throw new Error('Le serveur a renvoyé une réponse invalide. Vérifiez que l\'API est accessible.');
+        throw new Error(`Réponse invalide: ${text.substring(0, 120)}`);
       }
 
       if (!statsRes.ok) {
-        const errorData = await statsRes.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(`Statistics: ${errorData.message || statsRes.statusText}`);
+        const errorData = await statsRes.json().catch(() => ({ message: 'Erreur inconnue' }));
+        throw new Error(errorData.message || statsRes.statusText);
       }
 
-      console.log('✅ Response OK, parsing JSON...');
-
       const statsData = await statsRes.json();
-
       if (statsData.success && statsData.data) {
-        console.log('✅ Statistics received from backend');
         setStats(statsData.data as Stats);
       } else {
         throw new Error('Format de données invalide');
       }
-
     } catch (err: any) {
-      console.error('❌ Error fetching dashboard stats:', err);
       setError(err.message || 'Impossible de charger les statistiques');
       setStats(null);
     } finally {
@@ -153,7 +128,6 @@ export default function AdminDashboard() {
   };
 
   const handleLogout = () => {
-    console.log('🔓 Logging out...');
     logout();
     router.push('/login');
   };
@@ -215,28 +189,6 @@ export default function AdminDashboard() {
                   Retour à la connexion
                 </button>
               </div>
-
-              {/* Debug Info */}
-              {process.env.NODE_ENV === 'development' && (
-                <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-left text-xs text-gray-600 dark:text-gray-400">
-                  <p className="font-semibold mb-2">🔍 Debug Information:</p>
-                  <p>• User: {user?.email || 'Not logged in'}</p>
-                  <p>• Role: {user?.role || 'Unknown'}</p>
-                  <p>• Token (access_token): {localStorage.getItem('access_token') ? '✓ Present' : '✗ Missing'}</p>
-                  <p>• Token (token): {localStorage.getItem('token') ? '✓ Present' : '✗ Missing'}</p>
-                  <p>• API URL: {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}</p>
-                  <p>• Error: {error}</p>
-                  <button
-                    onClick={() => {
-                      console.log('Full localStorage:', localStorage);
-                      console.log('User:', user);
-                    }}
-                    className="mt-2 text-blue-600 hover:text-blue-800"
-                  >
-                    Log full debug info to console
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -247,7 +199,6 @@ export default function AdminDashboard() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        {/* Header */}
         <header className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
             <div>
@@ -267,20 +218,53 @@ export default function AdminDashboard() {
                 <RefreshCw className="w-4 h-4" />
               </button>
               <span className="text-sm text-gray-600 dark:text-gray-400">{user?.email}</span>
-             
             </div>
           </div>
         </header>
 
-        {/* Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Top Stats Cards */}
+          {/* Hero Decor */}
+          <div className="mb-8 bg-gradient-to-r from-green-50 via-white to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 border border-green-100 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm dark:shadow-slate-900/40">
+            <div className="grid grid-cols-1 md:grid-cols-2 items-center">
+              <div className="p-6 md:p-8 space-y-3">
+                <p className="text-sm uppercase tracking-wide text-green-700 dark:text-green-300 font-semibold">Vue d'ensemble</p>
+                <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
+                  Supervisez vos commandes et vos équipes en temps réel
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Suivez les indicateurs clés, anticipez les pics d'activité et gardez un oeil sur la performance de la plateforme.
+                </p>
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <span className="px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-green-200 dark:border-slate-700 text-green-700 dark:text-green-300">
+                    {stats.orders.total.toLocaleString()} commandes
+                  </span>
+                  <span className="px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-700 dark:text-blue-300">
+                    {stats.drivers.available} livreurs en ligne
+                  </span>
+                  <span className="px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-purple-200 dark:border-slate-700 text-purple-700 dark:text-purple-300">
+                    {stats.restaurants.active} restaurants actifs
+                  </span>
+                </div>
+              </div>
+              <div className="relative h-56 md:h-full min-h-[240px]">
+                <Image
+                  src="/login.png"
+                  alt="Dashboard illustration"
+                  fill
+                  priority
+                  className="object-cover object-center md:object-right opacity-95"
+                />
+                <div className="absolute inset-0 bg-gradient-to-l from-white/40 via-transparent to-transparent dark:from-slate-900/60" />
+              </div>
+            </div>
+          </div>
+
+          {/* Top Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Notifications Non Lues */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Notifications Non Lues</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Notifications</p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">
                     {stats.notifications?.unread || 0}
                   </p>
@@ -298,19 +282,17 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-            {/* Total Orders */}
+
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Commandes</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Total commandes</p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">
                     {stats.orders.total.toLocaleString()}
                   </p>
                   <div className="flex items-center mt-2 text-sm">
                     <TrendingUp className="w-4 h-4 text-green-600 mr-1" />
-                    <span className="text-green-600 font-medium">
-                      +{stats.orders.growth}%
-                    </span>
+                    <span className="text-green-600 font-medium">+{stats.orders.growth}%</span>
                     <span className="text-gray-500 dark:text-gray-400 ml-2">ce mois</span>
                   </div>
                 </div>
@@ -320,23 +302,20 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Total Revenue */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Revenu Total</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Revenu total</p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">
-                    {stats.revenue.total.toLocaleString('fr-DZ', { 
-                      style: 'currency', 
+                    {stats.revenue.total.toLocaleString('fr-DZ', {
+                      style: 'currency',
                       currency: 'DZD',
                       minimumFractionDigits: 0
                     })}
                   </p>
                   <div className="flex items-center mt-2 text-sm">
                     <TrendingUp className="w-4 h-4 text-green-600 mr-1" />
-                    <span className="text-green-600 font-medium">
-                      +{stats.revenue.growth}%
-                    </span>
+                    <span className="text-green-600 font-medium">+{stats.revenue.growth}%</span>
                     <span className="text-gray-500 dark:text-gray-400 ml-2">ce mois</span>
                   </div>
                 </div>
@@ -346,29 +325,10 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Active Restaurants */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Restaurants Actifs</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">
-                    {stats.restaurants.active}
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                    sur {stats.restaurants.total} total
-                  </p>
-                </div>
-                <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-full">
-                  <Store className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-                </div>
-              </div>
-            </div>
-
-            {/* Online Drivers */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Livreurs Disponibles</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Livreurs disponibles</p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">
                     {stats.drivers.available}
                   </p>
@@ -383,127 +343,110 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Order Status Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Order Status */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                État des Commandes
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">En attente</span>
-                  </div>
-                  <span className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                    {stats.orders.pending}
-                  </span>
+          {/* Insights Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Ecosystème</h3>
+                <div className="px-3 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+                  En direct
                 </div>
-                
-                <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Truck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">En cours</span>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <Store className="w-4 h-4 text-purple-500" />
+                    Restaurants actifs
                   </div>
-                  <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {stats.orders.inProgress}
-                  </span>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{stats.restaurants.active}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">sur {stats.restaurants.total}</p>
+                  </div>
                 </div>
-                
-                <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">Livrées</span>
+                <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <UserCheck className="w-4 h-4 text-teal-500" />
+                    Clients vérifiés
                   </div>
-                  <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {stats.orders.completed}
-                  </span>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{stats.clients.verified}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">sur {stats.clients.total}</p>
+                  </div>
                 </div>
-                
-                <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">Annulées</span>
+                <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <Truck className="w-4 h-4 text-orange-500" />
+                    Livreurs actifs
                   </div>
-                  <span className="text-2xl font-bold text-red-600 dark:text-red-400">
-                    {stats.orders.cancelled}
-                  </span>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{stats.drivers.total}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{stats.drivers.available} en ligne</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Additional Stats */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                Statistiques Détaillées
-              </h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-3 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-gray-600 dark:text-gray-400">Panier moyen</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {stats.revenue.average.toLocaleString('fr-DZ', { 
-                      style: 'currency', 
-                      currency: 'DZD',
-                      minimumFractionDigits: 0
-                    })}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center p-3 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-gray-600 dark:text-gray-400">Total clients</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {stats.clients.total}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center p-3 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-gray-600 dark:text-gray-400">Clients vérifiés</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {stats.clients.verified}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center p-3 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-gray-600 dark:text-gray-400">Restaurants premium</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {stats.restaurants.premium}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center p-3">
-                  <span className="text-gray-600 dark:text-gray-400">Total livreurs</span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {stats.drivers.total}
-                  </span>
-                </div>
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Flux des commandes</h3>
+                <Clock3 className="w-5 h-5 text-yellow-500" />
+              </div>
+              <div className="space-y-3">
+                {[
+                  { label: 'En attente', value: stats.orders.pending, color: 'bg-yellow-500' },
+                  { label: 'En cours', value: stats.orders.inProgress, color: 'bg-blue-500' },
+                  { label: 'Livrées', value: stats.orders.completed, color: 'bg-green-500' },
+                  { label: 'Annulées', value: stats.orders.cancelled, color: 'bg-red-500' },
+                ].map((item) => {
+                  const total = Math.max(stats.orders.total, 1);
+                  const width = Math.min(100, Math.round((item.value / total) * 100));
+                  return (
+                    <div key={item.label}>
+                      <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                        <span>{item.label}</span>
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">{item.value}</span>
+                      </div>
+                      <div className="w-full bg-gray-100 dark:bg-gray-700 h-2 rounded-full overflow-hidden mt-1">
+                        <div className={`${item.color} h-2 rounded-full transition-all`} style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
 
-          {/* Driver Status */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              État des Livreurs
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                  {stats.drivers.available}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Disponibles</p>
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Valeur & Qualité</h3>
+                <TrendingUp className="w-5 h-5 text-green-500" />
               </div>
-              <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                  {stats.drivers.busy}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">En livraison</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <p className="text-3xl font-bold text-gray-600 dark:text-gray-400">
-                  {stats.drivers.offline}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Hors ligne</p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Panier moyen</div>
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      {stats.revenue.average.toLocaleString('fr-DZ', {
+                        style: 'currency',
+                        currency: 'DZD',
+                        minimumFractionDigits: 0
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-3">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Restaurants premium</div>
+                  <div className="text-right">
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{stats.restaurants.premium}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{stats.restaurants.approved} approuvés</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-3">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Notifications ouvertes</div>
+                  <div className="text-right">
+                    <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{stats.notifications.unresolved}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">dont {stats.notifications.unread} non lues</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

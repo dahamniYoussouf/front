@@ -88,9 +88,6 @@ export default function AdminNotifications() {
   // Fetch notifications
   useEffect(() => {
     fetchNotifications();
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   // Calculate stats when notifications change

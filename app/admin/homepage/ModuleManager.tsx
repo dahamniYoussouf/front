@@ -40,7 +40,7 @@ export type ModuleFormField = {
   options?:
     | ModuleFieldOption[]
     | ((
-        references: Record<string, ModuleItem[]>,
+        references: ModuleManagerReferences,
         context?: ModuleFieldOptionContext
       ) => ModuleFieldOption[]);
   default?: string | number | boolean;
@@ -63,8 +63,8 @@ export type ModuleDescriptor = {
   gradient: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   fields: ModuleFormField[];
-  itemTitle?: (item: ModuleItem, references?: Record<string, ModuleItem[]>) => string;
-  itemSubtitle?: (item: ModuleItem, references?: Record<string, ModuleItem[]>) => string;
+  itemTitle?: (item: ModuleItem, references?: ModuleManagerReferences) => string;
+  itemSubtitle?: (item: ModuleItem, references?: ModuleManagerReferences) => string;
 };
 
 type AuthFetch = (endpoint: string, options?: RequestInit) => Promise<unknown>;
@@ -76,13 +76,18 @@ type FieldRenderHelpers = {
   handleFilterChange?: (key: string, value: string) => void;
 };
 
+export type ModuleManagerReferences = Partial<Record<string, ModuleItem[]>> & {
+  restaurants?: ModuleItem[];
+  menuItemsByRestaurant?: Record<string, ModuleItem[]>;
+};
+
 type ModuleManagerProps = {
   config: ModuleDescriptor;
   items: ModuleItem[];
   isLoading: boolean;
   onRefresh: () => Promise<void>;
   fetchWithToken: AuthFetch;
-  references?: Record<string, ModuleItem[]>;
+  references?: ModuleManagerReferences;
 };
 
 const buildDefaultState = (fields: ModuleFormField[]) => {
@@ -168,7 +173,7 @@ const buildPayload = (state: Record<string, unknown>, fields: ModuleFormField[])
 
 const resolveOptions = (
   field: ModuleFormField,
-  references?: Record<string, ModuleItem[]>,
+  references?: ModuleManagerReferences,
   context?: ModuleFieldOptionContext
 ) => {
   if (!field.options) {
@@ -200,7 +205,7 @@ const buildItemMeta = (item: ModuleItem) => {
 const buildItemTitle = (
   item: ModuleItem,
   config: ModuleDescriptor,
-  references?: Record<string, ModuleItem[]>
+  references?: ModuleManagerReferences
 ) => {
   if (config.itemTitle) {
     return config.itemTitle(item, references);
@@ -223,7 +228,7 @@ const buildItemTitle = (
 const buildItemSubtitle = (
   item: ModuleItem,
   config: ModuleDescriptor,
-  references?: Record<string, ModuleItem[]>
+  references?: ModuleManagerReferences
 ) => {
   if (config.itemSubtitle) {
     return config.itemSubtitle(item, references) ?? '';
@@ -234,7 +239,7 @@ const buildItemSubtitle = (
 const formatCellValue = (
   item: ModuleItem,
   field: ModuleFormField,
-  references?: Record<string, ModuleItem[]>
+  references?: ModuleManagerReferences
 ) => {
   const raw = item[field.name];
 
@@ -274,7 +279,7 @@ const renderField = (
   setter: (name: string, value: unknown) => void,
   role: 'create' | 'edit',
   disabled = false,
-  references?: Record<string, ModuleItem[]>,
+  references?: ModuleManagerReferences,
   helpers?: FieldRenderHelpers
 ) => {
   const fieldId = `${config.key}-${role}-${field.name}`;
@@ -439,7 +444,7 @@ export default function ModuleManager({
   fetchWithToken,
   references,
 }: ModuleManagerProps) {
-  const referenceData = references ?? {};
+  const referenceData: ModuleManagerReferences = references ?? {};
   const defaultFormState = useMemo(() => buildDefaultState(config.fields), [config.fields]);
   const [createState, setCreateState] = useState<Record<string, unknown>>(() => ({ ...defaultFormState }));
   const [editState, setEditState] = useState<Record<string, unknown>>(() => ({ ...defaultFormState }));

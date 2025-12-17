@@ -8,7 +8,9 @@ import Loader from '@/components/Loader';
 import ModuleManager, {
   ModuleDescriptor,
   ModuleFieldOption,
-  ModuleItem
+  ModuleItem,
+  ModuleFieldOnChangeContext,
+  ModuleManagerReferences
 } from './ModuleManager';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -50,12 +52,23 @@ const buildAsyncOptions = (payload: unknown, labelKeys: string[]): ModuleFieldOp
 const RESTAURANT_LABEL_KEYS = ['name', 'title', 'company_name'];
 const MENU_ITEM_LABEL_KEYS = ['nom', 'name', 'title'];
 
-const mapRestaurantOptions = (references?: Record<string, ModuleItem[]>) =>
+const mapRestaurantOptions = (references?: ModuleManagerReferences) =>
   buildAsyncOptions(references?.restaurants ?? [], RESTAURANT_LABEL_KEYS);
 
+type MenuItemContext = {
+  state?: Record<string, unknown>;
+  item?: ModuleItem & {
+    restaurant?: { id?: string };
+    category?: {
+      restaurant_id?: string;
+      restaurant?: { id?: string };
+    };
+  };
+};
+
 const buildMenuItemOptions = (
-  references?: Record<string, ModuleItem[]> & { menuItemsByRestaurant?: Record<string, ModuleItem[]> },
-  context?: { state?: Record<string, unknown>; item?: ModuleItem }
+  references?: ModuleManagerReferences,
+  context?: MenuItemContext
 ) => {
   const isFormContext = Boolean(context?.state);
   const restaurantId =
@@ -456,7 +469,7 @@ export default function AdminHomepageManagement() {
           }
           return {
             ...field,
-            onValueChange: (value, context) => {
+            onValueChange: (value: string | number | boolean, context: ModuleFieldOnChangeContext) => {
               context.setter('menu_item_id', '');
               const restaurantValue = String(value ?? '').trim();
               if (restaurantValue) {
@@ -519,12 +532,13 @@ export default function AdminHomepageManagement() {
     };
   }, [fetchWithToken, refreshKey, loading]);
 
-  const combinedReferences = useMemo(
-    () => ({
-      ...moduleData,
-      restaurants: referenceLists.restaurants,
-      menuItemsByRestaurant
-    }),
+  const combinedReferences = useMemo<ModuleManagerReferences>(
+    () =>
+      ({
+        ...moduleData,
+        restaurants: referenceLists.restaurants,
+        menuItemsByRestaurant
+      } as ModuleManagerReferences),
     [moduleData, referenceLists, menuItemsByRestaurant]
   );
 

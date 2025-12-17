@@ -1643,6 +1643,9 @@ export default function AnnouncementManagement() {
 
   useEffect(() => {
     let active = true;
+    const isRestaurantEntry = (entry: { id: string; name: string } | null): entry is { id: string; name: string } =>
+      Boolean(entry);
+
     const loadRestaurants = async () => {
       try {
         const token = localStorage.getItem('access_token');
@@ -1667,16 +1670,18 @@ export default function AnnouncementManagement() {
           return;
         }
 
-        const formatted = list
-          .map((entry) => {
+        const formatted: { id: string; name: string }[] = list
+          .map((entry: { id?: string; name?: string; company_name?: string }) => {
             if (!entry?.id) {
               return null;
             }
             const label = entry.name ?? entry.company_name ?? String(entry.id);
             return { id: entry.id, name: label };
           })
-          .filter((entry): entry is { id: string; name: string } => Boolean(entry))
-          .sort((a, b) => a.name.localeCompare(b.name));
+          .filter(isRestaurantEntry)
+          .sort((a: { id: string; name: string }, b: { id: string; name: string }) =>
+            a.name.localeCompare(b.name)
+          );
 
         setRestaurants(formatted);
         setRestaurantError('');

@@ -8,8 +8,7 @@ import Loader from '@/components/Loader';
 import ModuleManager, {
   ModuleDescriptor,
   ModuleFieldOption,
-  ModuleItem,
-  AsyncOptionsConfig
+  ModuleItem
 } from './ModuleManager';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -48,15 +47,53 @@ const buildAsyncOptions = (payload: unknown, labelKeys: string[]): ModuleFieldOp
     .filter((option): option is ModuleFieldOption => Boolean(option));
 };
 
-const createAsyncOptionsConfig = (
-  endpoint: (query: string) => string,
-  labelKeys: string[]
-): AsyncOptionsConfig => ({
-  endpoint,
-  mapper: (payload) => buildAsyncOptions(payload, labelKeys)
-});
+const RESTAURANT_LABEL_KEYS = ['name', 'title', 'company_name'];
+const MENU_ITEM_LABEL_KEYS = ['nom', 'name', 'title'];
 
-const moduleConfigs: ModuleDescriptor[] = [
+const mapRestaurantOptions = (references?: Record<string, ModuleItem[]>) =>
+  buildAsyncOptions(references?.restaurants ?? [], RESTAURANT_LABEL_KEYS);
+
+const buildMenuItemOptions = (
+  references?: Record<string, ModuleItem[]> & { menuItemsByRestaurant?: Record<string, ModuleItem[]> },
+  context?: { state?: Record<string, unknown>; item?: ModuleItem }
+) => {
+  const isFormContext = Boolean(context?.state);
+  const restaurantId =
+    context?.state?.restaurant_id ??
+    context?.item?.restaurant_id ??
+    context?.item?.restaurant?.id ??
+    context?.item?.category?.restaurant_id ??
+    context?.item?.category?.restaurant?.id ??
+    '';
+  const normalizedRestaurantId = String(restaurantId ?? '').trim();
+
+  if (isFormContext && !normalizedRestaurantId) {
+    return [];
+  }
+
+  const restaurantSpecificItems =
+    normalizedRestaurantId && references?.menuItemsByRestaurant?.[normalizedRestaurantId]
+      ? references.menuItemsByRestaurant[normalizedRestaurantId]
+      : [];
+  const fallbackItems = references?.menuItems ?? [];
+  const sourceItems = restaurantSpecificItems.length ? restaurantSpecificItems : fallbackItems;
+
+  return sourceItems
+    .map((item) => {
+      const label =
+        String(item.nom ?? item.name ?? item.title ?? item.description ?? item.id ?? '')
+          .trim() || String(item.id ?? item.uuid ?? item._id ?? '');
+      const value = String(item.id ?? item.uuid ?? item._id ?? '');
+      if (!value) {
+        return null;
+      }
+      return { value, label };
+    })
+    .filter((option): option is ModuleFieldOption => Boolean(option))
+    .sort((a, b) => a.label.localeCompare(b.label));
+};
+
+const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
   {
     key: 'categories',
     title: "Catégories d'accueil",
@@ -126,24 +163,25 @@ const moduleConfigs: ModuleDescriptor[] = [
     createEndpoint: '/admin/homepage/recommended-dishes',
     updateEndpoint: (item) => `/admin/homepage/recommended-dishes/${item.id}`,
     deleteEndpoint: (item) => `/admin/homepage/recommended-dishes/${item.id}`,
-    fields: [
+      fields: [
       {
         name: 'restaurant_id',
         label: 'Restaurant',
         type: 'select',
         required: true,
-        placeholder: 'Rechercher un restaurant',
+        placeholder: 'Sélectionnez un restaurant',
         searchable: true,
-        asyncOptions: createAsyncOptionsConfig(() => '/restaurant/getall', ['name', 'title', 'company_name'])
+        options: (refs) => mapRestaurantOptions(refs),
       },
       {
         name: 'menu_item_id',
         label: 'Plat',
         type: 'select',
         required: true,
-        placeholder: 'Rechercher un plat',
+        placeholder: 'Sélectionnez un restaurant d\'abord',
         searchable: true,
-        asyncOptions: createAsyncOptionsConfig(() => '/menuitem/getall', ['nom', 'name', 'title'])
+        hint: 'Le menu se met à jour après le choix d\'un restaurant',
+        options: (refs, context) => buildMenuItemOptions(refs, context)
       },
       { name: 'reason', label: 'Motif', type: 'textarea', placeholder: 'Coup de cœur du chef' },
       { name: 'is_active', label: 'Actif', type: 'checkbox', default: true }
@@ -188,9 +226,9 @@ const moduleConfigs: ModuleDescriptor[] = [
         name: 'restaurant_id',
         label: 'Restaurant (facultatif)',
         type: 'select',
-        placeholder: 'Rechercher un restaurant (optionnel)',
+        placeholder: 'Sélectionnez un restaurant (optionnel)',
         searchable: true,
-        asyncOptions: createAsyncOptionsConfig(() => '/restaurant/getall', ['name', 'title', 'company_name'])
+        options: (refs) => mapRestaurantOptions(refs)
       },
       { name: 'discount_value', label: 'Valeur du rabais', type: 'number', placeholder: '25' },
       { name: 'badge_text', label: 'Badge texte', type: 'text', placeholder: '-20%' },
@@ -279,7 +317,7 @@ const moduleConfigs: ModuleDescriptor[] = [
         type: 'select',
         placeholder: 'Associer un restaurant (facultatif)',
         searchable: true,
-        asyncOptions: createAsyncOptionsConfig(() => '/restaurant/getall', ['name', 'title', 'company_name'])
+        options: (refs) => mapRestaurantOptions(refs)
       },
       { name: 'start_date', label: 'Début', type: 'date' },
       { name: 'end_date', label: 'Fin', type: 'date' },
@@ -358,20 +396,18 @@ const fetchWithToken = async (endpoint: string, options: RequestInit = {}) => {
 export default function AdminHomepageManagement() {
   const searchParams = useSearchParams();
   const selectedModuleKey = searchParams?.get('module') ?? '';
-  const selectedModule = useMemo(() => {
-    if (!selectedModuleKey) {
-      return null;
-    }
-    return moduleConfigs.find((module) => module.key === selectedModuleKey) ?? null;
-  }, [selectedModuleKey]);
-  const modulesToRender = selectedModule ? [selectedModule] : moduleConfigs;
-  const moduleNotFound = Boolean(selectedModuleKey && !selectedModule);
-
   const [moduleData, setModuleData] = useState<Record<string, ModuleItem[]>>({});
   const [moduleLoading, setModuleLoading] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [referenceLists, setReferenceLists] = useState<{
+    restaurants: ModuleItem[];
+  }>({
+    restaurants: []
+  });
   const [refreshKey, setRefreshKey] = useState(0);
+  const [menuItemsByRestaurant, setMenuItemsByRestaurant] = useState<Record<string, ModuleItem[]>>({});
+
 
   const loadModule = useCallback(async (config: ModuleDescriptor) => {
     setModuleLoading((previous) => ({ ...previous, [config.key]: true }));
@@ -387,6 +423,61 @@ export default function AdminHomepageManagement() {
     }
   }, []);
 
+  const fetchMenuItemsForRestaurant = useCallback(
+    async (restaurantId: string) => {
+      if (!restaurantId) {
+        return;
+      }
+      try {
+        const payload = await fetchWithToken(`/menuitem/getall?restaurant_id=${restaurantId}&limit=1000`);
+        const list = getArray(payload) as ModuleItem[];
+        setMenuItemsByRestaurant((previous) => ({
+          ...previous,
+          [restaurantId]: list
+        }));
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Erreur lors de la récupération des plats par restaurant :', error);
+      }
+    },
+    [fetchWithToken]
+  );
+
+  const moduleConfigs = useMemo(() => {
+    return BASE_MODULE_CONFIGS.map((module) => {
+      if (module.key !== 'recommended') {
+        return module;
+      }
+      return {
+        ...module,
+        fields: module.fields.map((field) => {
+          if (field.name !== 'restaurant_id') {
+            return field;
+          }
+          return {
+            ...field,
+            onValueChange: (value, context) => {
+              context.setter('menu_item_id', '');
+              const restaurantValue = String(value ?? '').trim();
+              if (restaurantValue) {
+                fetchMenuItemsForRestaurant(restaurantValue);
+              }
+            }
+          };
+        })
+      };
+    });
+  }, [fetchMenuItemsForRestaurant]);
+
+  const selectedModule = useMemo(() => {
+    if (!selectedModuleKey) {
+      return null;
+    }
+    return moduleConfigs.find((module) => module.key === selectedModuleKey) ?? null;
+  }, [selectedModuleKey, moduleConfigs]);
+  const modulesToRender = selectedModule ? [selectedModule] : moduleConfigs;
+  const moduleNotFound = Boolean(selectedModuleKey && !selectedModule);
+
   useEffect(() => {
     let active = true;
     const loadAll = async () => {
@@ -401,7 +492,41 @@ export default function AdminHomepageManagement() {
     return () => {
       active = false;
     };
-  }, [loadModule, refreshKey]);
+  }, [loadModule, refreshKey, moduleConfigs]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+    let active = true;
+    const loadReferences = async () => {
+      try {
+        const payload = await fetchWithToken('/restaurant/getall');
+        if (!active) {
+          return;
+        }
+        setReferenceLists({
+          restaurants: ensureArrayPayload(payload)
+        });
+      } catch (error) {
+        console.warn('Impossible de charger la liste des restaurants :', error);
+      }
+    };
+
+    loadReferences();
+    return () => {
+      active = false;
+    };
+  }, [fetchWithToken, refreshKey, loading]);
+
+  const combinedReferences = useMemo(
+    () => ({
+      ...moduleData,
+      restaurants: referenceLists.restaurants,
+      menuItemsByRestaurant
+    }),
+    [moduleData, referenceLists, menuItemsByRestaurant]
+  );
 
   const handlePageRefresh = () => {
     setRefreshKey((previous) => previous + 1);
@@ -447,7 +572,7 @@ export default function AdminHomepageManagement() {
                 isLoading={Boolean(moduleLoading[module.key])}
                 onRefresh={() => loadModule(module)}
                 fetchWithToken={fetchWithToken}
-                references={moduleData}
+                references={combinedReferences}
               />
             ))}
           </div>

@@ -44,6 +44,7 @@ interface Announcement {
     id: string;
     name: string;
   } | null;
+  restaurant_id?: string | null;
 }
 
 type ModalType = '' | 'view' | 'edit' | 'create' | 'delete' | 'preview';
@@ -1618,6 +1619,8 @@ export default function AnnouncementManagement() {
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState<boolean>(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [restaurants, setRestaurants] = useState<{ id: string; name: string }[]>([]);
+  const [restaurantError, setRestaurantError] = useState<string>('');
   
   // Builder state
   const [builderTab, setBuilderTab] = useState<BuilderTab>('content');
@@ -1629,12 +1632,66 @@ export default function AnnouncementManagement() {
     type: 'info',
     is_active: true,
     start_date: '',
-    end_date: ''
+    end_date: '',
+    restaurant_id: ''
   });
 
   // Fetch announcements
   useEffect(() => {
     fetchAnnouncements();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadRestaurants = async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          throw new Error('Non authentifié');
+        }
+        const response = await fetch(`${API_URL}/restaurant/getall`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Impossible de charger la liste des restaurants');
+        }
+
+        const payload = await response.json();
+        const list = Array.isArray(payload?.data) ? payload.data : [];
+
+        if (!active) {
+          return;
+        }
+
+        const formatted = list
+          .map((entry) => {
+            if (!entry?.id) {
+              return null;
+            }
+            const label = entry.name ?? entry.company_name ?? String(entry.id);
+            return { id: entry.id, name: label };
+          })
+          .filter((entry): entry is { id: string; name: string } => Boolean(entry))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        setRestaurants(formatted);
+        setRestaurantError('');
+      } catch (err: any) {
+        console.error('Erreur fetch restaurants:', err);
+        if (active) {
+          setRestaurantError(err?.message || 'Impossible de charger les restaurants');
+        }
+      }
+    };
+
+    loadRestaurants();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const fetchAnnouncements = async () => {
@@ -1704,7 +1761,8 @@ export default function AnnouncementManagement() {
       type: template.type,
       is_active: true,
       start_date: '',
-      end_date: ''
+      end_date: '',
+      restaurant_id: ''
     });
     setShowTemplateMenu(false);
     setBuilderTab('content');
@@ -1723,7 +1781,8 @@ export default function AnnouncementManagement() {
         type: 'info',
         is_active: true,
         start_date: '',
-        end_date: ''
+        end_date: '',
+        restaurant_id: ''
       });
     } else if (type === 'edit' && announcement) {
       setFormData({
@@ -1734,7 +1793,8 @@ export default function AnnouncementManagement() {
         type: announcement.type,
         is_active: announcement.is_active,
         start_date: announcement.start_date ? announcement.start_date.split('T')[0] : '',
-        end_date: announcement.end_date ? announcement.end_date.split('T')[0] : ''
+        end_date: announcement.end_date ? announcement.end_date.split('T')[0] : '',
+        restaurant_id: announcement.restaurant_id ?? ''
       });
     }
 
@@ -1823,7 +1883,8 @@ export default function AnnouncementManagement() {
         type: formData.type,
         is_active: formData.is_active,
         start_date: formData.start_date || null,
-        end_date: formData.end_date || null
+        end_date: formData.end_date || null,
+        restaurant_id: formData.restaurant_id || null
       };
 
       let response;
@@ -1919,6 +1980,9 @@ export default function AnnouncementManagement() {
       ...prev,
       [field]: value
     }));
+    if (field === 'restaurant_id') {
+      setRestaurantError('');
+    }
     // Effacer l'erreur du champ modifié
     if (formErrors[field]) {
       setFormErrors((prev) => {
@@ -2490,6 +2554,14 @@ export default function AnnouncementManagement() {
                       {selectedAnnouncement.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Restaurant
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {selectedAnnouncement.restaurant?.name ?? 'Global'}
+                    </p>
+                  </div>
 
                   {/* Custom Styles */}
                   {(selectedAnnouncement.css_styles || selectedAnnouncement.js_scripts) && (
@@ -2567,6 +2639,27 @@ export default function AnnouncementManagement() {
                           <span className="text-sm text-gray-700">Annonce active</span>
                         </label>
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Restaurant (optionnel)
+                      </label>
+                      <select
+                        value={formData.restaurant_id || ''}
+                        onChange={(e) => handleInputChange('restaurant_id', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                      >
+                        <option value="">Global</option>
+                        {restaurants.map((restaurant) => (
+                          <option key={restaurant.id} value={restaurant.id}>
+                            {restaurant.name}
+                          </option>
+                        ))}
+                      </select>
+                      {restaurantError && (
+                        <p className="mt-1 text-xs text-red-600">{restaurantError}</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

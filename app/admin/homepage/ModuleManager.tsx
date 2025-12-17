@@ -11,6 +11,19 @@ export type ModuleFieldOption = {
   value: string;
 };
 
+export type ModuleFieldOptionContext = {
+  state?: Record<string, unknown>;
+  item?: ModuleItem;
+  role?: 'create' | 'edit';
+};
+
+export type ModuleFieldOnChangeContext = {
+  state: Record<string, unknown>;
+  setter: (name: string, value: unknown) => void;
+  role: 'create' | 'edit';
+  fieldName: string;
+};
+
 export type AsyncOptionsConfig = {
   endpoint: (query: string) => string;
   mapper: (payload: unknown) => ModuleFieldOption[];
@@ -26,10 +39,17 @@ export type ModuleFormField = {
   required?: boolean;
   options?:
     | ModuleFieldOption[]
-    | ((references: Record<string, ModuleItem[]>) => ModuleFieldOption[]);
+    | ((
+        references: Record<string, ModuleItem[]>,
+        context?: ModuleFieldOptionContext
+      ) => ModuleFieldOption[]);
   default?: string | number | boolean;
   searchable?: boolean;
   asyncOptions?: AsyncOptionsConfig;
+  onValueChange?: (
+    value: string | number | boolean,
+    context: ModuleFieldOnChangeContext
+  ) => void;
 };
 
 export type ModuleDescriptor = {
@@ -146,12 +166,16 @@ const buildPayload = (state: Record<string, unknown>, fields: ModuleFormField[])
   return payload;
 };
 
-const resolveOptions = (field: ModuleFormField, references?: Record<string, ModuleItem[]>) => {
+const resolveOptions = (
+  field: ModuleFormField,
+  references?: Record<string, ModuleItem[]>,
+  context?: ModuleFieldOptionContext
+) => {
   if (!field.options) {
     return [];
   }
   if (typeof field.options === 'function') {
-    return field.options(references ?? {});
+    return field.options(references ?? {}, context);
   }
   return field.options;
 };
@@ -227,7 +251,7 @@ const formatCellValue = (
   }
 
   if (field.type === 'select') {
-    const options = resolveOptions(field, references);
+    const options = resolveOptions(field, references, { item });
     const matched = options.find((option) => option.value === String(raw));
     return matched?.label ?? String(raw);
   }
@@ -258,7 +282,18 @@ const renderField = (
   const baseInputClass =
     'w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-900 dark:text-white';
 
-  const handleChange = (input: string) => setter(field.name, input);
+  const optionContext: ModuleFieldOptionContext = { state, role };
+  const applyChange = (input: string | number | boolean) => {
+    setter(field.name, input);
+    if (field.onValueChange) {
+      field.onValueChange(input, {
+        state,
+        setter,
+        role,
+        fieldName: field.name
+      });
+    }
+  };
 
   switch (field.type) {
     case 'textarea':
@@ -272,7 +307,7 @@ const renderField = (
             rows={3}
             value={typeof value === 'string' ? value : ''}
             placeholder={field.placeholder}
-            onChange={(event) => handleChange(event.target.value)}
+            onChange={(event) => applyChange(event.target.value)}
             className={`${baseInputClass} min-h-[90px] resize-none`}
             disabled={disabled}
             required={field.required}
@@ -281,7 +316,7 @@ const renderField = (
         </div>
       );
     case 'select': {
-      const baseOptions = resolveOptions(field, references);
+      const baseOptions = resolveOptions(field, references, optionContext);
       const fieldKey = `${config.key}-${field.name}`;
       const asyncOptions = field.asyncOptions ? helpers?.asyncOptionsCache?.[fieldKey] ?? [] : [];
       const mergedOptions = [...baseOptions, ...asyncOptions];
@@ -330,7 +365,7 @@ const renderField = (
           <select
             id={fieldId}
             value={typeof value === 'string' ? value : ''}
-            onChange={(event) => handleChange(event.target.value)}
+            onChange={(event) => applyChange(event.target.value)}
             className={baseInputClass}
             disabled={disabled || !dedupedOptions.length}
             required={field.required}
@@ -356,7 +391,7 @@ const renderField = (
             id={fieldId}
             type="checkbox"
             checked={Boolean(value)}
-            onChange={(event) => setter(field.name, event.target.checked)}
+            onChange={(event) => applyChange(event.target.checked)}
             className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600"
             disabled={disabled}
           />
@@ -384,7 +419,7 @@ const renderField = (
               typeof value === 'number' ? String(value) : typeof value === 'string' ? value : ''
             }
             placeholder={field.placeholder}
-            onChange={(event) => handleChange(event.target.value)}
+            onChange={(event) => applyChange(event.target.value)}
             className={baseInputClass}
             disabled={disabled}
             required={field.required}

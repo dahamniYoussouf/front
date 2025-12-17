@@ -200,7 +200,7 @@ export default function AdminDashboard() {
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <header className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 Tableau de bord administrateur
@@ -225,7 +225,7 @@ export default function AdminDashboard() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Hero Decor */}
           <div className="mb-8 bg-gradient-to-r from-green-50 via-white to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 border border-green-100 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm dark:shadow-slate-900/40">
-            <div className="grid grid-cols-1 md:grid-cols-2 items-center">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
               <div className="p-6 md:p-8 space-y-3">
                 <p className="text-sm uppercase tracking-wide text-green-700 dark:text-green-300 font-semibold">Vue d'ensemble</p>
                 <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
@@ -246,13 +246,13 @@ export default function AdminDashboard() {
                   </span>
                 </div>
               </div>
-              <div className="relative h-56 md:h-full min-h-[240px]">
+              <div className="relative hidden md:block h-56 md:h-full min-h-[240px] rounded-b-2xl lg:rounded-r-2xl overflow-hidden">
                 <Image
                   src="/login.png"
                   alt="Dashboard illustration"
                   fill
                   priority
-                  className="object-cover object-center md:object-right opacity-95"
+                  className="object-cover object-center md:object-right opacity-95 transition-transform duration-500 hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-l from-white/40 via-transparent to-transparent dark:from-slate-900/60" />
               </div>
@@ -344,7 +344,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Insights Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Ecosystème</h3>

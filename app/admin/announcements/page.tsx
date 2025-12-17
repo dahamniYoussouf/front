@@ -40,6 +40,10 @@ interface Announcement {
   end_date?: string;
   created_at: string;
   updated_at: string;
+  restaurant?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 type ModalType = '' | 'view' | 'edit' | 'create' | 'delete' | 'preview';
@@ -2127,13 +2131,16 @@ export default function AnnouncementManagement() {
             <div className="hidden md:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Annonce
-                    </th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
+                    <tr>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Annonce
+                      </th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Restaurant
+                      </th>
+                      <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
                     <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Période
                     </th>
@@ -2168,6 +2175,9 @@ export default function AnnouncementManagement() {
                             }}
                           />
                         </div>
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {announcement.restaurant?.name ?? 'Global'}
                       </td>
                       <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTypeBadgeColor(announcement.type)}`}>
@@ -2291,6 +2301,9 @@ export default function AnnouncementManagement() {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${getTypeBadgeColor(announcement.type)}`}>
                       {getTypeIcon(announcement.type)}
                       <span className="ml-1 capitalize">{announcement.type}</span>
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 font-medium">
+                      {announcement.restaurant?.name ?? 'Global'}
                     </span>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${

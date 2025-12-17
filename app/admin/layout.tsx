@@ -1,21 +1,51 @@
 'use client'
-import { useRouter, usePathname } from 'next/navigation';
-import { Home, UtensilsCrossed, Users, Truck, ClipboardList, LogOut, Menu, X, ShieldCheck, Megaphone, Bell, Heart, User, Moon, Sun, Map, Database, UserCheck, Activity, Settings } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import {
+  Home,
+  UtensilsCrossed,
+  Users,
+  Truck,
+  ClipboardList,
+  LogOut,
+  Menu,
+  X,
+  ShieldCheck,
+  Megaphone,
+  Bell,
+  Heart,
+  User,
+  Moon,
+  Sun,
+  Map,
+  Database,
+  UserCheck,
+  Activity,
+  Settings,
+  LayoutTemplate,
+  Grid,
+  Layers,
+  Star,
+  Zap,
+  Sparkles
+} from 'lucide-react';
 import Image from 'next/image';
 import NotificationPopupWrapper from '@/components/NotificationPopupWrapper';
 import { useTheme } from '@/contexts/ThemeContext';
 
 
-export default function AdminLayout({
+const AdminLayoutContent = ({
   children,
 }: {
   children: React.ReactNode;
-}) {
+}) => {
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const searchParams = useSearchParams();
+  const currentModule = searchParams?.get('module');
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   // Vérifier l'authentification
   useEffect(() => {
@@ -30,96 +60,58 @@ export default function AdminLayout({
     setSidebarOpen(false);
   }, [pathname]);
 
-  const menuItems = [
+  const homepageModuleItems = [
+    { title: 'Catégories d’accueil', icon: Grid, moduleKey: 'categories' },
+    { title: 'Collections thématiques', icon: Layers, moduleKey: 'thematics' },
+    { title: 'Plats recommandés', icon: Star, moduleKey: 'recommended' },
+    { title: 'Promotions & badges', icon: Zap, moduleKey: 'promotions' },
+    { title: 'Offres du jour', icon: Sparkles, moduleKey: 'dailyDeals' },
+    { title: 'Annonces', icon: Megaphone, moduleKey: 'announcements' }
+  ];
+
+  const menuSections = [
     {
-      title: 'Tableau de Bord',
-      icon: Home,
-      href: '/admin/dashboard',
-      path: '/admin/dashboard'
+      title: "Vue d'ensemble",
+      items: [
+        { title: 'Tableau de Bord', icon: Home, href: '/admin/dashboard', path: '/admin/dashboard' },
+        {
+          title: "Page d'accueil",
+          icon: LayoutTemplate,
+          href: '/admin/homepage',
+          path: '/admin/homepage',
+          children: homepageModuleItems.map((module) => ({
+            title: module.title,
+            icon: module.icon,
+            href: `/admin/homepage?module=${module.moduleKey}`,
+            path: '/admin/homepage',
+            moduleKey: module.moduleKey
+          }))
+        },
+        { title: 'Monitoring', icon: Activity, href: '/admin/monitoring', path: '/admin/monitoring' },
+        { title: 'Notifications', icon: Bell, href: '/admin/notifications', path: '/admin/notifications' }
+      ]
     },
     {
-      title: 'Monitoring',
-      icon: Activity,
-      href: '/admin/monitoring',
-      path: '/admin/monitoring'
+      title: 'Opérations',
+      items: [
+        { title: 'Restaurants', icon: UtensilsCrossed, href: '/admin/restaurants', path: '/admin/restaurants' },
+        { title: 'Clients', icon: Users, href: '/admin/clients', path: '/admin/clients' },
+        { title: 'Favoris', icon: Heart, href: '/admin/favories', path: '/admin/favories' },
+        { title: 'Livreurs', icon: Truck, href: '/admin/livreurs', path: '/admin/livreurs' },
+        { title: 'Caissiers', icon: UserCheck, href: '/admin/cashiers', path: '/admin/cashiers' },
+        { title: 'Administrateurs', icon: ShieldCheck, href: '/admin/admins', path: '/admin/admins' },
+        { title: 'Commandes', icon: ClipboardList, href: '/admin/commandes', path: '/admin/commandes' }
+      ]
     },
     {
-      title: 'Gestion Restaurants',
-      icon: UtensilsCrossed,
-      href: '/admin/restaurants',
-      path: '/admin/restaurants'
-    },
-    {
-      title: 'Gestion Clients',
-      icon: Users,
-      href: '/admin/clients',
-      path: '/admin/clients'
-    },
-    {
-      title: 'Favoris Clients',
-      icon: Heart,
-      href: '/admin/favories',
-      path: '/admin/favories'
-    },
-    {
-      title: 'Gestion Livreurs',
-      icon: Truck,
-      href: '/admin/livreurs',
-      path: '/admin/livreurs'
-    },
-    {
-      title: 'Gestion Caissiers',
-      icon: UserCheck,
-      href: '/admin/cashiers',
-      path: '/admin/cashiers'
-    },
-    {
-      title: 'Gestion Admins',
-      icon: ShieldCheck,
-      href: '/admin/admins',
-      path: '/admin/admins'
-    },
-    {
-      title: 'Gestion Commandes',
-      icon: ClipboardList,
-      href: '/admin/commandes',
-      path: '/admin/commandes'
-    },
-    {
-      title: 'Gestion Annonces',
-      icon: Megaphone,
-      href: '/admin/announcements',
-      path: '/admin/announcements'
-    },
-    {
-      title: 'Gestion Notifications',
-      icon: Bell,
-      href: '/admin/notifications',
-      path: '/admin/notifications'
-    },
-    {
-      title: 'Gestion Configurations',
-      icon: Settings,
-      href: '/admin/configurations',
-      path: '/admin/configurations'
-    },
-    {
-      title: 'Carte Interactive',
-      icon: Map,
-      href: '/admin/map',
-      path: '/admin/map'
-    },
-    {
-      title: 'Gestion du Cache',
-      icon: Database,
-      href: '/admin/cache',
-      path: '/admin/cache'
-    },
-    {
-      title: 'Mon Profil',
-      icon: User,
-      href: '/admin/profil',
-      path: '/admin/profil'
+      title: 'Outils & support',
+      items: [
+        { title: 'Annonces', icon: Megaphone, href: '/admin/announcements', path: '/admin/announcements' },
+        { title: 'Configurations', icon: Settings, href: '/admin/configurations', path: '/admin/configurations' },
+        { title: 'Carte interactive', icon: Map, href: '/admin/map', path: '/admin/map' },
+        { title: 'Cache', icon: Database, href: '/admin/cache', path: '/admin/cache' },
+        { title: 'Profil', icon: User, href: '/admin/profil', path: '/admin/profil' }
+      ]
     }
   ];
 
@@ -132,6 +124,7 @@ export default function AdminLayout({
   const getBreadcrumb = (pathname: string) => {
     const routes: Record<string, string> = {
       '/admin/dashboard': 'Tableau de Bord',
+      '/admin/homepage': "Page d'accueil",
       '/admin/monitoring': 'Monitoring',
       '/admin/restaurants': 'Gestion des Restaurants',
       '/admin/clients': 'Gestion des Clients',
@@ -161,7 +154,7 @@ export default function AdminLayout({
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50
-        w-64 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col
+        w-56 lg:w-60 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
@@ -185,26 +178,82 @@ export default function AdminLayout({
         </div>
 
         {/* Menu Items */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.path;
-            
-            return (
-              <button
-                key={item.path}
-                onClick={() => router.push(item.href)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-green-600 dark:bg-green-600 text-white shadow-sm'
-                    : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-100'
-                }`}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                <span className="font-medium text-sm">{item.title}</span>
-              </button>
-            );
-          })}
+        <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+          {menuSections.map((section) => (
+            <div key={section.title} className="space-y-2">
+              <p className="text-[0.65rem] uppercase tracking-[0.3em] text-gray-500 dark:text-gray-400 font-semibold">
+                {section.title}
+              </p>
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+                  const childActive =
+                    hasChildren &&
+                    item.children!.some(
+                      (child) =>
+                        pathname === child.path &&
+                        (!child.moduleKey || currentModule === child.moduleKey)
+                    );
+                  const isActiveParent = pathname === item.path || childActive;
+                  const isExpanded = expandedSection === item.title;
+
+                  const handleParentClick = () => {
+                    if (hasChildren) {
+                      setExpandedSection((previous) =>
+                        previous === item.title ? null : item.title
+                      );
+                    }
+                    router.push(item.href);
+                  };
+
+                  return (
+                    <div key={item.href} className="space-y-1">
+                      <button
+                        onClick={handleParentClick}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                          isActiveParent
+                            ? 'bg-green-600 dark:bg-green-600 text-white shadow-sm'
+                            : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-100'
+                        }`}
+                      >
+                        {Icon && <Icon className="w-5 h-5 flex-shrink-0" />}
+                        <span className="font-medium text-sm">{item.title}</span>
+                      </button>
+                      {hasChildren && (
+                        <div
+                          className={`ml-4 space-y-1 pl-2 overflow-hidden transition-[max-height] duration-300 ease-in-out ${
+                            isExpanded ? 'max-h-[400px]' : 'max-h-0'
+                          }`}
+                        >
+                          {item.children!.map((child) => {
+                            const ChildIcon = child.icon;
+                            const isChildActive =
+                              pathname === child.path &&
+                              (!child.moduleKey || currentModule === child.moduleKey);
+                            return (
+                              <button
+                                key={`${child.href}-${child.moduleKey ?? child.title}`}
+                                onClick={() => router.push(child.href)}
+                                className={`w-full flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                  isChildActive
+                                    ? 'bg-green-600 dark:bg-green-600 text-white shadow-sm'
+                                    : 'text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-100'
+                                }`}
+                              >
+                                {ChildIcon && <ChildIcon className="w-4 h-4 flex-shrink-0" />}
+                                <span className="truncate">{child.title}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Footer - Logout */}
@@ -277,5 +326,19 @@ export default function AdminLayout({
         }}
       />
     </div>
+  );
+};
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-slate-900">
+          <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full" />
+        </div>
+      }
+    >
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </Suspense>
   );
 }

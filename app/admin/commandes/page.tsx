@@ -520,158 +520,157 @@ export default function OrderManagement() {
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Commande
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Client
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Restaurant
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Montant
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Statut
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+            <div className="p-6 space-y-6">
+              {filteredOrders.length === 0 ? (
+                <div className="text-center py-12">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-sm font-medium text-gray-900">
+                    Aucune commande trouvAce
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Essayez de modifier vos critA"res de recherche
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
                   {filteredOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Package className="w-5 h-5 text-gray-400 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {order.order_number}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {order.payment_method && getPaymentMethodLabel(order.payment_method)}
-                            </div>
+                    <div
+                      key={order.id}
+                      className="border border-gray-200/70 rounded-3xl bg-white p-5 shadow-sm transition-shadow hover:shadow-lg"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-gray-400">
+                            Commande
+                          </p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {order.order_number}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                            <Clock className="w-4 h-4" />
+                            {formatDate(order.created_at)}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <User className="w-4 h-4 text-gray-400 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {order.client ? `${order.client.first_name} ${order.client.last_name}` : 'N/A'}
-                            </div>
-                            {order.client?.phone_number && (
-                              <div className="text-sm text-gray-500 flex items-center">
-                                <Phone className="w-3 h-3 mr-1" />
-                                {order.client.phone_number}
-                              </div>
+                        <div className="flex flex-col items-start gap-1 md:items-end">
+                          {getStatusBadge(order.status)}
+                          <div className="flex items-center gap-1 text-xs font-semibold text-gray-500">
+                            {order.order_type === 'delivery' ? (
+                              <>
+                                <Truck className="w-4 h-4 text-blue-500" />
+                                Livraison
+                              </>
+                            ) : (
+                              <>
+                                <Package className="w-4 h-4 text-emerald-500" />
+                                À emporter
+                              </>
                             )}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Store className="w-4 h-4 text-gray-400 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {order.restaurant?.name || 'N/A'}
-                            </div>
-                            {order.restaurant?.address && (
-                              <div className="text-sm text-gray-500 truncate max-w-xs">
-                                {order.restaurant.address}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {order.order_type === 'delivery' ? (
-                            <Truck className="w-4 h-4 text-blue-500 mr-2" />
-                          ) : (
-                            <Package className="w-4 h-4 text-green-500 mr-2" />
-                          )}
-                          <span className="text-sm text-gray-900">
-                            {order.order_type === 'delivery' ? 'Livraison' : 'À emporter'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-green-600">
-                          {formatCurrency(parseFloat(order.total_amount.toString()))}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          Sous-total: {formatCurrency(parseFloat(order.subtotal.toString()))}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(order.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-500">
-                          <Clock className="w-4 h-4 mr-1" />
-                          {formatDate(order.created_at)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleAction(order, 'view')}
-                            className="text-gray-600 hover:text-gray-900 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                            title="Voir les détails"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {order.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => handleAction(order, 'accept')}
-                                className="text-green-600 hover:text-green-900 p-1.5 rounded-lg hover:bg-green-50 transition-colors"
-                                title="Accepter"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleAction(order, 'decline')}
-                                className="text-red-600 hover:text-red-900 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                                title="Refuser"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
 
-            {filteredOrders.length === 0 && (
-              <div className="text-center py-12">
-                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-sm font-medium text-gray-900">
-                  Aucune commande trouvée
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Essayez de modifier vos critères de recherche
-                </p>
-              </div>
-            )}
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase text-gray-500">Client</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {order.client
+                              ? `${order.client.first_name} ${order.client.last_name}`
+                              : 'N/A'}
+                          </p>
+                          {order.client?.phone_number && (
+                            <p className="flex items-center gap-1 text-xs text-gray-500">
+                              <Phone className="w-3 h-3" />
+                              {order.client.phone_number}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase text-gray-500">Restaurant</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {order.restaurant?.name || 'N/A'}
+                          </p>
+                          {order.restaurant?.address && (
+                            <p className="flex items-center gap-1 text-xs text-gray-500 truncate">
+                              <MapPin className="w-3 h-3" />
+                              {order.restaurant.address}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase text-gray-500">Montant</p>
+                          <p className="text-lg font-semibold text-green-600">
+                            {formatCurrency(order.total_amount ?? 0)}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Sous-total: {formatCurrency(order.subtotal ?? 0)}
+                          </p>
+                          <p className="flex items-center gap-1 text-xs text-gray-500">
+                            <DollarSign className="w-3 h-3" />
+                            {getPaymentMethodLabel(order.payment_method)}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase text-gray-500">Livraison</p>
+                          <div className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+                            {order.order_type === 'delivery' ? (
+                              <>
+                                <Truck className="w-4 h-4 text-blue-500" />
+                                Livraison
+                              </>
+                            ) : (
+                              <>
+                                <Package className="w-4 h-4 text-emerald-500" />
+                                À emporter
+                              </>
+                            )}
+                          </div>
+                          {order.delivery_address ? (
+                            <p className="text-xs text-gray-500 truncate">
+                              {order.delivery_address}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-gray-400">Sans adresse</p>
+                          )}
+                          {order.estimated_delivery_time && (
+                            <p className="text-xs text-gray-500">
+                              Prévu: {order.estimated_delivery_time}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap justify-end gap-2 mt-4">
+                        <button
+                          onClick={() => handleAction(order, 'view')}
+                          className="px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+                        >
+                          Voir les détails
+                        </button>
+                        {order.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleAction(order, 'accept')}
+                              className="px-4 py-2 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition"
+                            >
+                              Accepter
+                            </button>
+                            <button
+                              onClick={() => handleAction(order, 'decline')}
+                              className="px-4 py-2 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition"
+                            >
+                              Refuser
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Pagination */}
             {!loading && (

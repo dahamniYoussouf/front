@@ -2,83 +2,173 @@
 
 import { FormEvent, Key, useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import type { ComponentType, SVGProps } from 'react';
 
-export type ModuleItem = Record<string, unknown>;
+import { renderField, FieldRenderHelpers } from './module-manager/renderField';
+import {
+  buildDefaultState,
+  mapItemToState,
+  buildPayload,
+  buildItemTitle,
+  formatCellValue
+} from './module-manager/helpers';
+import type {
+  ModuleDescriptor,
+  ModuleFieldOption,
+  ModuleFieldOnChangeContext,
+  ModuleFormField,
+  ModuleItem,
+  ModuleManagerReferences
+} from './module-manager/types';
 
-export type ModuleFieldOption = {
-  label: string;
-  value: string;
-};
-
-export type ModuleFieldOptionContext = {
-  state?: Record<string, unknown>;
-  item?: ModuleItem;
-  role?: 'create' | 'edit';
-};
-
-export type ModuleFieldOnChangeContext = {
-  state: Record<string, unknown>;
-  setter: (name: string, value: unknown) => void;
-  role: 'create' | 'edit';
-  fieldName: string;
-};
-
-export type AsyncOptionsConfig = {
-  endpoint: (query: string) => string;
-  mapper: (payload: unknown) => ModuleFieldOption[];
-  minQueryLength?: number;
-};
-
-export type ModuleFormField = {
-  name: string;
-  label: string;
-  type: 'text' | 'textarea' | 'number' | 'url' | 'select' | 'checkbox' | 'date';
-  placeholder?: string;
-  hint?: string;
-  required?: boolean;
-  options?:
-    | ModuleFieldOption[]
-    | ((
-        references: ModuleManagerReferences,
-        context?: ModuleFieldOptionContext
-      ) => ModuleFieldOption[]);
-  default?: string | number | boolean;
-  searchable?: boolean;
-  asyncOptions?: AsyncOptionsConfig;
-  onValueChange?: (
-    value: string | number | boolean,
-    context: ModuleFieldOnChangeContext
-  ) => void;
-};
-
-export type ModuleDescriptor = {
-  key: string;
-  title: string;
-  description: string;
-  fetchEndpoint: string;
-  createEndpoint?: string;
-  updateEndpoint?: (item: ModuleItem) => string;
-  deleteEndpoint?: (item: ModuleItem) => string;
-  gradient: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  fields: ModuleFormField[];
-  itemTitle?: (item: ModuleItem, references?: ModuleManagerReferences) => string;
-  itemSubtitle?: (item: ModuleItem, references?: ModuleManagerReferences) => string;
-};
+export type {
+  ModuleDescriptor,
+  ModuleFieldOption,
+  ModuleFieldOnChangeContext,
+  ModuleFormField,
+  ModuleItem,
+  ModuleManagerReferences
+} from './module-manager/types';
 
 type AuthFetch = (endpoint: string, options?: RequestInit) => Promise<unknown>;
 type StatusMessage = { text: string; variant: 'error' | 'success' | 'neutral' };
-type FieldRenderHelpers = {
-  selectFilters?: Record<string, string>;
-  asyncOptionsCache?: Record<string, ModuleFieldOption[]>;
-  asyncLoading?: Record<string, boolean>;
-  handleFilterChange?: (key: string, value: string) => void;
+type ValidationPayload = {
+  msg: string;
+  param?: string;
+};
+type FetchValidationError = Error & {
+  errors?: ValidationPayload[];
 };
 
-export type ModuleManagerReferences = Partial<Record<string, ModuleItem[]>> & {
-  restaurants?: ModuleItem[];
-  menuItemsByRestaurant?: Record<string, ModuleItem[]>;
+const mapValidationErrors = (errors?: ValidationPayload[]) => {
+  const result: Record<string, string> = {};
+  if (!Array.isArray(errors)) {
+    return result;
+  }
+  errors.forEach((entry) => {
+    if (!entry.param) {
+      return;
+    }
+    if (result[entry.param]) {
+      return;
+    }
+    result[entry.param] = entry.msg || 'Erreur de validation';
+  });
+  return result;
+};
+
+type MenuItemPromotionReference = {
+  promotionId?: string | number;
+  title: string;
+};
+
+type MenuItemPromotionConflict = {
+  menuItemId: string;
+  promotions: MenuItemPromotionReference[];
+};
+
+const getStringOrNumberValue = (value: unknown): string | number | undefined =>
+  typeof value === 'string' || typeof value === 'number' ? value : undefined;
+
+const extractMenuItemIdsFromPayload = (payload: Record<string, unknown>) => {
+  const ids = new Set<string>();
+  const addId = (value?: unknown) => {
+    if (value === undefined || value === null) {
+      return;
+    }
+    const normalized = String(value).trim();
+    if (normalized) {
+      ids.add(normalized);
+    }
+  };
+
+  addId(payload.menu_item_id);
+
+  const menuItemIds = payload.menu_item_ids;
+  if (typeof menuItemIds === 'string') {
+    menuItemIds
+      .split(/[,\n]/)
+      .map((token) => token.trim())
+      .forEach(addId);
+  } else if (Array.isArray(menuItemIds)) {
+    menuItemIds.forEach(addId);
+  }
+
+  return Array.from(ids);
+};
+
+const getPromotionTitle = (item: ModuleItem) => {
+  if (typeof item.title === 'string' && item.title.trim()) {
+    return item.title.trim();
+  }
+  if (typeof item.badge_text === 'string' && item.badge_text.trim()) {
+    return item.badge_text.trim();
+  }
+  if (typeof item.description === 'string' && item.description.trim()) {
+    return item.description.trim();
+  }
+  if (item.id !== undefined && item.id !== null) {
+    return String(item.id);
+  }
+  return 'Promotion';
+};
+
+const buildMenuItemPromotionMap = (items: ModuleItem[]) => {
+  const map = new Map<string, MenuItemPromotionReference[]>();
+  items.forEach((promotion) => {
+    const promotionReference: MenuItemPromotionReference = {
+      promotionId: getStringOrNumberValue(promotion.id),
+      title: getPromotionTitle(promotion)
+    };
+    const addReference = (menuItemId?: string | number) => {
+      if (!menuItemId) {
+        return;
+      }
+      const key = String(menuItemId);
+      const existing = map.get(key) ?? [];
+      existing.push(promotionReference);
+      map.set(key, existing);
+    };
+
+    addReference(getStringOrNumberValue(promotion.menu_item_id));
+    const linkedItems = Array.isArray(promotion.menu_items) ? promotion.menu_items : [];
+    linkedItems.forEach((menuItem) => {
+      addReference(getStringOrNumberValue((menuItem as ModuleItem)?.id));
+    });
+  });
+  return map;
+};
+
+const findMenuItemPromotionConflicts = (
+  menuItemIds: string[],
+  map: Map<string, MenuItemPromotionReference[]>,
+  currentPromotionId?: string | number
+) => {
+  const conflicts: MenuItemPromotionConflict[] = [];
+  const currentIdString =
+    currentPromotionId !== undefined && currentPromotionId !== null
+      ? String(currentPromotionId)
+      : null;
+
+  menuItemIds.forEach((menuItemId) => {
+    const references = map.get(menuItemId);
+    if (!references?.length) {
+      return;
+    }
+    const filtered = references.filter((reference) => {
+      if (!currentIdString) {
+        return true;
+      }
+      if (reference.promotionId === undefined || reference.promotionId === null) {
+        return true;
+      }
+      return String(reference.promotionId) !== currentIdString;
+    });
+    if (filtered.length) {
+      conflicts.push({ menuItemId, promotions: filtered });
+    }
+  });
+
+  return conflicts;
 };
 
 type ModuleManagerProps = {
@@ -88,352 +178,6 @@ type ModuleManagerProps = {
   onRefresh: () => Promise<void>;
   fetchWithToken: AuthFetch;
   references?: ModuleManagerReferences;
-};
-
-const buildDefaultState = (fields: ModuleFormField[]) => {
-  const state: Record<string, string | number | boolean> = {};
-  fields.forEach((field) => {
-    if (field.default !== undefined) {
-      state[field.name] = field.default;
-    } else if (field.type === 'checkbox') {
-      state[field.name] = false;
-    } else {
-      state[field.name] = '';
-    }
-  });
-  return state;
-};
-
-const formatDateForInput = (value: unknown) => {
-  if (!value) {
-    return '';
-  }
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-  return date.toISOString().split('T')[0];
-};
-
-const mapItemToState = (item: ModuleItem, fields: ModuleFormField[]) => {
-  const state: Record<string, string | number | boolean> = {};
-  fields.forEach((field) => {
-    const raw = item[field.name];
-    if (field.type === 'checkbox') {
-      state[field.name] = Boolean(raw);
-    } else if (field.type === 'date') {
-      state[field.name] = formatDateForInput(raw);
-    } else {
-      const value = raw ?? '';
-      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-        state[field.name] = value;
-      } else {
-        state[field.name] = '';
-      }
-    }
-  });
-  return state;
-};
-
-const buildPayload = (state: Record<string, unknown>, fields: ModuleFormField[]) => {
-  const payload: Record<string, unknown> = {};
-  fields.forEach((field) => {
-    const rawValue = state[field.name];
-    if (rawValue === undefined) {
-      return;
-    }
-    if (field.type === 'checkbox') {
-      payload[field.name] = Boolean(rawValue);
-      return;
-    }
-    if (field.type === 'number') {
-      if (rawValue === '' || rawValue === null) {
-        return;
-      }
-      const numeric = Number(rawValue);
-      if (!Number.isNaN(numeric)) {
-        payload[field.name] = numeric;
-      }
-      return;
-    }
-    if (field.type === 'date') {
-      if (rawValue) {
-        payload[field.name] = rawValue;
-      }
-      return;
-    }
-    const trimmed = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
-    if (trimmed === '' || trimmed === null) {
-      return;
-    }
-    payload[field.name] = trimmed;
-  });
-  return payload;
-};
-
-const resolveOptions = (
-  field: ModuleFormField,
-  references?: ModuleManagerReferences,
-  context?: ModuleFieldOptionContext
-) => {
-  if (!field.options) {
-    return [];
-  }
-  if (typeof field.options === 'function') {
-    return field.options(references ?? {}, context);
-  }
-  return field.options;
-};
-
-const buildItemMeta = (item: ModuleItem) => {
-  const pieces: string[] = [];
-  if (typeof item.is_active === 'boolean') {
-    pieces.push(`Actif ${item.is_active ? 'Oui' : 'Non'}`);
-  }
-  if (item.display_order !== undefined && item.display_order !== null) {
-    pieces.push(`Ordre ${item.display_order}`);
-  }
-  if (typeof item.reason === 'string' && item.reason.trim()) {
-    pieces.push(item.reason);
-  }
-  if (!pieces.length && typeof item.description === 'string' && item.description.trim()) {
-    pieces.push(item.description.trim());
-  }
-  return pieces.join(' • ');
-};
-
-const buildItemTitle = (
-  item: ModuleItem,
-  config: ModuleDescriptor,
-  references?: ModuleManagerReferences
-) => {
-  if (config.itemTitle) {
-    return config.itemTitle(item, references);
-  }
-  if (typeof item.name === 'string' && item.name.trim()) {
-    return item.name;
-  }
-  if (typeof item.title === 'string' && item.title.trim()) {
-    return item.title;
-  }
-  if (typeof item.reason === 'string' && item.reason.trim()) {
-    return item.reason;
-  }
-  if (typeof item.id === 'string' || typeof item.id === 'number') {
-    return String(item.id);
-  }
-  return 'Élément sans titre';
-};
-
-const buildItemSubtitle = (
-  item: ModuleItem,
-  config: ModuleDescriptor,
-  references?: ModuleManagerReferences
-) => {
-  if (config.itemSubtitle) {
-    return config.itemSubtitle(item, references) ?? '';
-  }
-  return buildItemMeta(item);
-};
-
-const formatCellValue = (
-  item: ModuleItem,
-  field: ModuleFormField,
-  references?: ModuleManagerReferences
-) => {
-  const raw = item[field.name];
-
-  if (raw === undefined || raw === null || raw === '') {
-    return '—';
-  }
-
-  if (field.type === 'checkbox') {
-    return Boolean(raw) ? 'Oui' : 'Non';
-  }
-
-  if (field.type === 'date') {
-    return formatDateForInput(raw) || String(raw);
-  }
-
-  if (field.type === 'select') {
-    const options = resolveOptions(field, references, { item });
-    const matched = options.find((option) => option.value === String(raw));
-    return matched?.label ?? String(raw);
-  }
-
-  if (Array.isArray(raw) || typeof raw === 'object') {
-    try {
-      return JSON.stringify(raw);
-    } catch {
-      return String(raw);
-    }
-  }
-
-  return String(raw);
-};
-
-const renderField = (
-  config: ModuleDescriptor,
-  field: ModuleFormField,
-  state: Record<string, unknown>,
-  setter: (name: string, value: unknown) => void,
-  role: 'create' | 'edit',
-  disabled = false,
-  references?: ModuleManagerReferences,
-  helpers?: FieldRenderHelpers
-) => {
-  const fieldId = `${config.key}-${role}-${field.name}`;
-  const value = state[field.name];
-  const baseInputClass =
-    'w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 transition focus:border-emerald-500 focus:outline-none disabled:cursor-not-allowed dark:border-slate-700 dark:bg-slate-900 dark:text-white';
-
-  const optionContext: ModuleFieldOptionContext = { state, role };
-  const applyChange = (input: string | number | boolean) => {
-    setter(field.name, input);
-    if (field.onValueChange) {
-      field.onValueChange(input, {
-        state,
-        setter,
-        role,
-        fieldName: field.name
-      });
-    }
-  };
-
-  switch (field.type) {
-    case 'textarea':
-      return (
-        <div key={fieldId} className="space-y-1">
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300" htmlFor={fieldId}>
-            {field.label}
-          </label>
-          <textarea
-            id={fieldId}
-            rows={3}
-            value={typeof value === 'string' ? value : ''}
-            placeholder={field.placeholder}
-            onChange={(event) => applyChange(event.target.value)}
-            className={`${baseInputClass} min-h-[90px] resize-none`}
-            disabled={disabled}
-            required={field.required}
-          />
-          {field.hint && <p className="text-xs text-slate-400 dark:text-slate-500">{field.hint}</p>}
-        </div>
-      );
-    case 'select': {
-      const baseOptions = resolveOptions(field, references, optionContext);
-      const fieldKey = `${config.key}-${field.name}`;
-      const asyncOptions = field.asyncOptions ? helpers?.asyncOptionsCache?.[fieldKey] ?? [] : [];
-      const mergedOptions = [...baseOptions, ...asyncOptions];
-      const seen = new Set<string>();
-      const dedupedOptions = mergedOptions.filter((option) => {
-        if (seen.has(option.value)) {
-          return false;
-        }
-        seen.add(option.value);
-        return true;
-      });
-      const filterValue = helpers?.selectFilters?.[fieldKey] ?? '';
-      const normalizedFilter = filterValue.trim().toLowerCase();
-      const filteredOptions =
-        normalizedFilter.length === 0
-          ? dedupedOptions
-          : dedupedOptions.filter(
-              (option) =>
-                option.label.toLowerCase().includes(normalizedFilter) ||
-                option.value.toLowerCase().includes(normalizedFilter)
-            );
-      const showSearch = Boolean(field.searchable) || Boolean(field.asyncOptions);
-      const isLoadingAsync = Boolean(field.asyncOptions && helpers?.asyncLoading?.[fieldKey]);
-
-      return (
-        <div key={fieldId} className="space-y-1">
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300" htmlFor={fieldId}>
-            {field.label}
-          </label>
-          {showSearch && (
-            <input
-              id={`${fieldId}-search`}
-              type="search"
-              value={filterValue}
-              placeholder={`Rechercher ${field.label.toLowerCase()}…`}
-              onChange={(event) => {
-                helpers?.handleFilterChange?.(fieldKey, event.target.value);
-              }}
-              className={`${baseInputClass} border-dashed border-slate-300 focus:border-emerald-500`}
-              disabled={disabled}
-            />
-          )}
-          {isLoadingAsync && (
-            <p className="text-[0.6rem] text-slate-400">Chargement des options...</p>
-          )}
-          <select
-            id={fieldId}
-            value={typeof value === 'string' ? value : ''}
-            onChange={(event) => applyChange(event.target.value)}
-            className={baseInputClass}
-            disabled={disabled || !dedupedOptions.length}
-            required={field.required}
-          >
-            <option value="">Sélectionner</option>
-            {filteredOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {field.hint && <p className="text-xs text-slate-400 dark:text-slate-500">{field.hint}</p>}
-        </div>
-      );
-    }
-    case 'checkbox':
-      return (
-        <label
-          key={fieldId}
-          className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200"
-        >
-          <input
-            id={fieldId}
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={(event) => applyChange(event.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600"
-            disabled={disabled}
-          />
-          {field.label}
-        </label>
-      );
-    default: {
-      const inputType =
-        field.type === 'number'
-          ? 'number'
-          : field.type === 'url'
-          ? 'url'
-          : field.type === 'date'
-          ? 'date'
-          : 'text';
-      return (
-        <div key={fieldId} className="space-y-1">
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300" htmlFor={fieldId}>
-            {field.label}
-          </label>
-          <input
-            id={fieldId}
-            type={inputType}
-            value={
-              typeof value === 'number' ? String(value) : typeof value === 'string' ? value : ''
-            }
-            placeholder={field.placeholder}
-            onChange={(event) => applyChange(event.target.value)}
-            className={baseInputClass}
-            disabled={disabled}
-            required={field.required}
-          />
-          {field.hint && <p className="text-xs text-slate-400 dark:text-slate-500">{field.hint}</p>}
-        </div>
-      );
-    }
-  }
 };
 
 export default function ModuleManager({
@@ -458,6 +202,18 @@ export default function ModuleManager({
   const [selectFilters, setSelectFilters] = useState<Record<string, string>>({});
   const [asyncOptionsCache, setAsyncOptionsCache] = useState<Record<string, ModuleFieldOption[]>>({});
   const [asyncLoading, setAsyncLoading] = useState<Record<string, boolean>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const removeFieldError = (name: string) => {
+    setFieldErrors((previous) => {
+      if (!previous[name]) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[name];
+      return next;
+    });
+  };
 
   useEffect(() => {
     setCreateState({ ...defaultFormState });
@@ -471,6 +227,7 @@ export default function ModuleManager({
     setSelectFilters({});
     setAsyncOptionsCache({});
     setAsyncLoading({});
+    setFieldErrors({});
   }, [config.key, defaultFormState]);
 
   useEffect(() => {
@@ -550,10 +307,44 @@ export default function ModuleManager({
       selectFilters,
       asyncOptionsCache,
       asyncLoading,
-      handleFilterChange
+      handleFilterChange,
+      fieldErrors
     }),
-    [selectFilters, asyncOptionsCache, asyncLoading, handleFilterChange]
+    [selectFilters, asyncOptionsCache, asyncLoading, handleFilterChange, fieldErrors]
   );
+
+  const menuItemPromotionMap = useMemo(() => {
+    if (config.key !== 'promotions') {
+      return new Map<string, MenuItemPromotionReference[]>();
+    }
+    return buildMenuItemPromotionMap(items);
+  }, [config.key, items]);
+
+  const shouldProceedWithMenuItemConflicts = (
+    payload: Record<string, unknown>,
+    currentPromotionId?: string | number
+  ) => {
+    if (config.key !== 'promotions') {
+      return true;
+    }
+    const selectedIds = extractMenuItemIdsFromPayload(payload);
+    if (!selectedIds.length) {
+      return true;
+    }
+    const conflicts = findMenuItemPromotionConflicts(selectedIds, menuItemPromotionMap, currentPromotionId);
+    if (!conflicts.length) {
+      return true;
+    }
+    const summary = conflicts
+      .map(({ menuItemId, promotions }) => {
+        const names = promotions.map((ref) => ref.title).join(', ');
+        return `• ${menuItemId}: ${names}`;
+      })
+      .join('\n');
+    return window.confirm(
+      `Les plats suivants sont déjà liés à d'autres promotions :\n${summary}\nSouhaitez-vous continuer malgré tout ?`
+    );
+  };
 
   const handleDelete = async (item: ModuleItem, key?: string) => {
     if (!config.deleteEndpoint) {
@@ -604,10 +395,14 @@ export default function ModuleManager({
       setCreateStatus({ text: 'Créer est désactivé pour ce module', variant: 'error' });
       return;
     }
-    setBusy((previous) => ({ ...previous, create: true }));
     setCreateStatus(null);
+    setFieldErrors({});
+    const payload = buildPayload(createState, config.fields);
+    if (!shouldProceedWithMenuItemConflicts(payload)) {
+      return;
+    }
+    setBusy((previous) => ({ ...previous, create: true }));
     try {
-      const payload = buildPayload(createState, config.fields);
       await fetchWithToken(config.createEndpoint, {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -617,8 +412,13 @@ export default function ModuleManager({
       await onRefresh();
       setShowCreateModal(false);
     } catch (error) {
+      const apiError = error as FetchValidationError;
+      const validationErrors = mapValidationErrors(apiError.errors);
+      if (Object.keys(validationErrors).length) {
+        setFieldErrors(validationErrors);
+      }
       setCreateStatus({
-        text: error instanceof Error ? error.message : 'Création impossible',
+        text: apiError.message,
         variant: 'error',
       });
     } finally {
@@ -631,14 +431,18 @@ export default function ModuleManager({
       setEditStatus({ text: "Sélectionnez un élément pour l'éditer.", variant: 'error' });
       return;
     }
-    setBusy((previous) => ({ ...previous, edit: true }));
     setEditStatus(null);
+    setFieldErrors({});
+    const payload = buildPayload(editState, config.fields);
+    if (!Object.keys(payload).length) {
+      setEditStatus({ text: 'Aucune modification à enregistrer.', variant: 'neutral' });
+      return;
+    }
+    if (!shouldProceedWithMenuItemConflicts(payload, getStringOrNumberValue(selectedItem?.id))) {
+      return;
+    }
+    setBusy((previous) => ({ ...previous, edit: true }));
     try {
-      const payload = buildPayload(editState, config.fields);
-      if (!Object.keys(payload).length) {
-        setEditStatus({ text: 'Aucune modification à enregistrer.', variant: 'neutral' });
-        return;
-      }
       await fetchWithToken(config.updateEndpoint(selectedItem), {
         method: 'PUT',
         body: JSON.stringify(payload),
@@ -649,8 +453,13 @@ export default function ModuleManager({
       await onRefresh();
       setShowEditModal(false);
     } catch (error) {
+      const apiError = error as FetchValidationError;
+      const validationErrors = mapValidationErrors(apiError.errors);
+      if (Object.keys(validationErrors).length) {
+        setFieldErrors(validationErrors);
+      }
       setEditStatus({
-        text: error instanceof Error ? error.message : 'Impossible de mettre à jour',
+        text: apiError.message,
         variant: 'error',
       });
     } finally {
@@ -830,6 +639,7 @@ export default function ModuleManager({
                   (name, value) => {
                     setCreateState((previous) => ({ ...previous, [name]: value }));
                     setCreateStatus(null);
+                    removeFieldError(name);
                   },
                   'create',
                   busy.create,
@@ -913,6 +723,7 @@ export default function ModuleManager({
                   (name, value) => {
                     setEditState((previous) => ({ ...previous, [name]: value }));
                     setEditStatus(null);
+                    removeFieldError(name);
                   },
                   'edit',
                   busy.edit,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import {
   ShoppingBag,
@@ -57,7 +57,42 @@ interface Stats {
     unresolved: number;
     resolved: number;
   };
+  pipeline?: {
+    period_days: number;
+    sample_size: number;
+    total_avg_minutes: number;
+    steps: Array<{
+      key: string;
+      label: string;
+      avg_minutes: number;
+      samples: number;
+    }>;
+  };
+  online?: {
+    clients: number;
+    restaurants: number;
+    drivers: number;
+    admins: number;
+  } | null;
 }
+
+const formatDa = (amount: number) => {
+  const safe = Number.isFinite(amount) ? amount : 0;
+  return Math.round(safe).toLocaleString('fr-DZ');
+};
+
+const formatMinutes = (minutes: number) => {
+  const safe = Number.isFinite(minutes) ? minutes : 0;
+  const totalMinutes = Math.max(0, Math.round(safe));
+
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
+  if (hours < 24) return `${hours}h ${remainingMinutes}m`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return `${days}j ${remainingHours}h`;
+};
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -66,11 +101,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDashboardStats();
-  }, [user]);
-
-  const fetchDashboardStats = async () => {
+  const fetchDashboardStats = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -119,13 +150,17 @@ export default function AdminDashboard() {
       } else {
         throw new Error('Format de données invalide');
       }
-    } catch (err: any) {
-      setError(err.message || 'Impossible de charger les statistiques');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Impossible de charger les statistiques');
       setStats(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [logout, router]);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, [fetchDashboardStats, user]);
 
   const handleLogout = () => {
     logout();
@@ -227,23 +262,28 @@ export default function AdminDashboard() {
           <div className="mb-8 bg-gradient-to-r from-green-50 via-white to-blue-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 border border-green-100 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm dark:shadow-slate-900/40">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
               <div className="p-6 md:p-8 space-y-3">
-                <p className="text-sm uppercase tracking-wide text-green-700 dark:text-green-300 font-semibold">Vue d'ensemble</p>
+                <p className="text-sm uppercase tracking-wide text-green-700 dark:text-green-300 font-semibold">Vue d&apos;ensemble</p>
                 <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">
                   Supervisez vos commandes et vos équipes en temps réel
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Suivez les indicateurs clés, anticipez les pics d'activité et gardez un oeil sur la performance de la plateforme.
+                  Suivez les indicateurs clés, anticipez les pics d&apos;activité et gardez un oeil sur la performance de la plateforme.
                 </p>
                 <div className="flex flex-wrap gap-3 text-sm">
                   <span className="px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-green-200 dark:border-slate-700 text-green-700 dark:text-green-300">
                     {stats.orders.total.toLocaleString()} commandes
                   </span>
                   <span className="px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-700 dark:text-blue-300">
-                    {stats.drivers.available} livreurs en ligne
+                    {(stats.online?.drivers ?? stats.drivers.available).toLocaleString()} livreurs en ligne
                   </span>
                   <span className="px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-purple-200 dark:border-slate-700 text-purple-700 dark:text-purple-300">
                     {stats.restaurants.active} restaurants actifs
                   </span>
+                  {typeof stats.online?.clients === 'number' && (
+                    <span className="px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-teal-200 dark:border-slate-700 text-teal-700 dark:text-teal-300">
+                      {stats.online.clients.toLocaleString()} clients connectés
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="relative hidden md:block h-56 md:h-full min-h-[240px] rounded-b-2xl lg:rounded-r-2xl overflow-hidden">
@@ -306,13 +346,12 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Revenu total</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">
-                    {stats.revenue.total.toLocaleString('fr-DZ', {
-                      style: 'currency',
-                      currency: 'DZD',
-                      minimumFractionDigits: 0
-                    })}
-                  </p>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight whitespace-nowrap">
+                      {formatDa(stats.revenue.total)}
+                    </p>
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-300">DA</span>
+                  </div>
                   <div className="flex items-center mt-2 text-sm">
                     <TrendingUp className="w-4 h-4 text-green-600 mr-1" />
                     <span className="text-green-600 font-medium">+{stats.revenue.growth}%</span>
@@ -424,13 +463,14 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-gray-600 dark:text-gray-400">Panier moyen</div>
                   <div className="text-right">
-                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                      {stats.revenue.average.toLocaleString('fr-DZ', {
-                        style: 'currency',
-                        currency: 'DZD',
-                        minimumFractionDigits: 0
-                      })}
-                    </p>
+                    <div className="flex items-baseline justify-end gap-1">
+                      <p className="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+                        {formatDa(stats.revenue.average)}
+                      </p>
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        DA
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-3">
@@ -450,6 +490,42 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+
+          {stats.pipeline && (
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  Temps moyen par étape
+                </h3>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {stats.pipeline.sample_size} commandes livrées • {stats.pipeline.period_days} derniers jours
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {stats.pipeline.steps.map((step) => (
+                  <div
+                    key={step.key}
+                    className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20 p-4"
+                  >
+                    <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                      {step.label}
+                    </div>
+                    <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
+                      {formatMinutes(step.avg_minutes)}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {step.samples} échantillons
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                Temps total moyen: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatMinutes(stats.pipeline.total_avg_minutes)}</span>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </ProtectedRoute>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Search,
   Eye,
@@ -8,14 +8,16 @@ import {
   XCircle,
   Clock,
   Package,
+  LayoutGrid,
+  List,
   Truck,
   MapPin,
   Phone,
+  Mail,
   DollarSign,
   User,
   Store,
   AlertCircle,
-  Filter,
   RefreshCw,
   ChevronLeft,
   ChevronRight
@@ -90,14 +92,17 @@ interface Order {
     id: string;
     first_name: string;
     last_name: string;
-    phone_number: string;
-    email: string;
+    phone_number?: string;
+    email?: string;
+    address?: string;
   };
   restaurant?: {
     id: string;
     name: string;
-    address: string;
+    address?: string;
     image_url?: string;
+    phone_number?: string;
+    email?: string;
   };
   driver?: {
     id: string;
@@ -110,6 +115,13 @@ interface Order {
 }
 
 type ModalType = '' | 'view' | 'accept' | 'decline' | 'assign';
+type ViewMode = 'cards' | 'table';
+
+const getErrorMessage = (err: unknown, fallback: string) => {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err.trim()) return err;
+  return fallback;
+};
 
 interface Pagination {
   current_page: number;
@@ -124,6 +136,7 @@ export default function OrderManagement() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'all' | OrderStatus>('all');
   const [filterType, setFilterType] = useState<'all' | OrderType>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>('');
@@ -141,12 +154,27 @@ export default function OrderManagement() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
 
-  // Fetch orders from backend
-  useEffect(() => {
-    fetchOrders();
-  }, [currentPage, filterStatus, filterType, pageSize]);
+  const patchOrderInState = (id: string, patch: Partial<Order>) => {
+    setOrders((prev) => prev.map((order) => (order.id === id ? { ...order, ...patch } : order)));
+  };
 
-  const fetchOrders = async () => {
+  const removeOrderFromState = (id: string) => {
+    setOrders((prev) => prev.filter((order) => order.id !== id));
+  };
+
+  const decrementPagination = (amount: number) => {
+    setPagination((prev) => {
+      const nextTotalItems = Math.max(0, (prev.total_items || 0) - amount);
+      const nextTotalPages = Math.max(1, Math.ceil(nextTotalItems / pageSize));
+      return {
+        ...prev,
+        total_items: nextTotalItems,
+        total_pages: nextTotalPages
+      };
+    });
+  };
+
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -172,10 +200,6 @@ export default function OrderManagement() {
         params.append('order_type', filterType);
       }
 
-      if (searchTerm.trim()) {
-        params.append('search', searchTerm.trim());
-      }
-
       const response = await fetch(`${API_URL}/order?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -197,24 +221,30 @@ export default function OrderManagement() {
       } else {
         throw new Error('Format de données invalide');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erreur fetch orders:', err);
-      setError(err?.message || 'Impossible de charger les commandes');
+      setError(getErrorMessage(err, 'Impossible de charger les commandes'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, filterStatus, filterType, pageSize]);
+
+  // Fetch orders from backend
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   // Filter orders locally (for search)
   const filteredOrders = orders.filter((order) => {
-    if (!searchTerm) return true;
-    
-    const search = searchTerm.toLowerCase();
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return true;
+
+    const matches = (value?: string) => (value ?? '').toLowerCase().includes(search);
     return (
-      order.order_number?.toLowerCase().includes(search) ||
-      order.client?.first_name?.toLowerCase().includes(search) ||
-      order.client?.last_name?.toLowerCase().includes(search) ||
-      order.restaurant?.name?.toLowerCase().includes(search)
+      matches(order.order_number) ||
+      matches(order.client?.first_name) ||
+      matches(order.client?.last_name) ||
+      matches(order.restaurant?.name)
     );
   });
 
@@ -253,9 +283,9 @@ export default function OrderManagement() {
         setModalType(type);
         setShowModal(true);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching order details:', err);
-      setError(err?.message || 'Impossible de charger les détails');
+      setError(getErrorMessage(err, 'Impossible de charger les détails'));
     }
   };
 
@@ -299,14 +329,29 @@ export default function OrderManagement() {
       const data = await response.json();
 
       if (data.success) {
-        await fetchOrders();
+        if (filterStatus === 'pending' && orders.length === 1 && currentPage > 1) {
+          handleCloseModal();
+          setCurrentPage(currentPage - 1);
+          return;
+        }
+
+        if (filterStatus === 'pending') {
+          removeOrderFromState(selectedOrder.id);
+          decrementPagination(1);
+        } else {
+          patchOrderInState(selectedOrder.id, {
+            status: 'accepted',
+            preparation_time: actionFormData.preparation_time || 15,
+            accepted_at: new Date().toISOString()
+          });
+        }
         handleCloseModal();
       } else {
         throw new Error('Échec de l\'acceptation');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erreur acceptation:', err);
-      setError(err?.message || 'Impossible d\'accepter la commande');
+      setError(getErrorMessage(err, 'Impossible d\'accepter la commande'));
     } finally {
       setSaveLoading(false);
     }
@@ -347,14 +392,28 @@ export default function OrderManagement() {
       const data = await response.json();
 
       if (data.success) {
-        await fetchOrders();
+        if (filterStatus === 'pending' && orders.length === 1 && currentPage > 1) {
+          handleCloseModal();
+          setCurrentPage(currentPage - 1);
+          return;
+        }
+
+        if (filterStatus === 'pending') {
+          removeOrderFromState(selectedOrder.id);
+          decrementPagination(1);
+        } else {
+          patchOrderInState(selectedOrder.id, {
+            status: 'declined',
+            decline_reason: actionFormData.decline_reason
+          });
+        }
         handleCloseModal();
       } else {
         throw new Error('Échec du refus');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Erreur refus:', err);
-      setError(err?.message || 'Impossible de refuser la commande');
+      setError(getErrorMessage(err, 'Impossible de refuser la commande'));
     } finally {
       setSaveLoading(false);
     }
@@ -396,7 +455,7 @@ export default function OrderManagement() {
     const pages: number[] = [];
     const maxVisiblePages = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
     if (endPage - startPage < maxVisiblePages - 1) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
@@ -445,21 +504,50 @@ export default function OrderManagement() {
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Gestion des Commandes</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {pagination.total_items} commande{pagination.total_items > 1 ? 's' : ''} trouvée{pagination.total_items > 1 ? 's' : ''}
               </p>
             </div>
-            <button
-              onClick={fetchOrders}
-              disabled={loading}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Chargement...' : 'Actualiser'}
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+              <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-900">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('cards')}
+                  className={`px-3 py-2 text-xs sm:text-sm font-medium flex items-center gap-2 transition-colors ${
+                    viewMode === 'cards'
+                      ? 'bg-green-600 text-white'
+                      : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  Cartes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`px-3 py-2 text-xs sm:text-sm font-medium flex items-center gap-2 transition-colors ${
+                    viewMode === 'table'
+                      ? 'bg-green-600 text-white'
+                      : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <List className="w-4 h-4" />
+                  Tableau
+                </button>
+              </div>
+
+              <button
+                onClick={fetchOrders}
+                disabled={loading}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{loading ? 'Chargement...' : 'Actualiser'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Error Message */}
@@ -485,27 +573,33 @@ export default function OrderManagement() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
-            >
-              <option value="all">Tous les statuts</option>
-              <option value="pending">En attente</option>
-              <option value="accepted">Acceptée</option>
+              <select
+                value={filterStatus}
+                onChange={(e) => {
+                  setFilterStatus(e.target.value as typeof filterStatus);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
+              >
+                <option value="all">Tous les statuts</option>
+                <option value="pending">En attente</option>
+                <option value="accepted">Acceptée</option>
               <option value="preparing">En préparation</option>
               <option value="assigned">Livreur assigné</option>
               <option value="delivering">En livraison</option>
               <option value="delivered">Livrée</option>
               <option value="declined">Refusée</option>
             </select>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as typeof filterType)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
-            >
-              <option value="all">Tous les types</option>
-              <option value="delivery">Livraison</option>
+              <select
+                value={filterType}
+                onChange={(e) => {
+                  setFilterType(e.target.value as typeof filterType);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none bg-white"
+              >
+                <option value="all">Tous les types</option>
+                <option value="delivery">Livraison</option>
               <option value="pickup">À emporter</option>
             </select>
           </div>
@@ -520,18 +614,18 @@ export default function OrderManagement() {
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="p-6 space-y-6">
+            <div className="px-4 sm:px-6 py-5 sm:py-6">
               {filteredOrders.length === 0 ? (
                 <div className="text-center py-12">
                   <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-sm font-medium text-gray-900">
-                    Aucune commande trouvAce
+                    Aucune commande trouvée
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    Essayez de modifier vos critA"res de recherche
+                    Essayez de modifier vos critères de recherche
                   </p>
                 </div>
-              ) : (
+              ) : viewMode === 'cards' ? (
                 <div className="space-y-4">
                   {filteredOrders.map((order) => (
                     <div
@@ -583,17 +677,55 @@ export default function OrderManagement() {
                               {order.client.phone_number}
                             </p>
                           )}
+                          {order.client?.email && (
+                            <p className="flex items-center gap-1 text-xs text-gray-500 truncate">
+                              <Mail className="w-3 h-3" />
+                              {order.client.email}
+                            </p>
+                          )}
+                          {order.client?.address && (
+                            <p className="flex items-center gap-1 text-xs text-gray-500 truncate">
+                              <MapPin className="w-3 h-3" />
+                              {order.client.address}
+                            </p>
+                          )}
                         </div>
 
                         <div className="space-y-1">
                           <p className="text-xs uppercase text-gray-500">Restaurant</p>
-                          <p className="text-sm font-semibold text-gray-900">
-                            {order.restaurant?.name || 'N/A'}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            {order.restaurant?.image_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={order.restaurant.image_url}
+                                alt={order.restaurant.name || 'Restaurant'}
+                                className="w-8 h-8 rounded-lg object-cover border border-gray-200"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                <Store className="w-4 h-4 text-gray-400" />
+                              </div>
+                            )}
+                            <p className="text-sm font-semibold text-gray-900">
+                              {order.restaurant?.name || 'N/A'}
+                            </p>
+                          </div>
                           {order.restaurant?.address && (
                             <p className="flex items-center gap-1 text-xs text-gray-500 truncate">
                               <MapPin className="w-3 h-3" />
                               {order.restaurant.address}
+                            </p>
+                          )}
+                          {order.restaurant?.phone_number && (
+                            <p className="flex items-center gap-1 text-xs text-gray-500">
+                              <Phone className="w-3 h-3" />
+                              {order.restaurant.phone_number}
+                            </p>
+                          )}
+                          {order.restaurant?.email && (
+                            <p className="flex items-center gap-1 text-xs text-gray-500 truncate">
+                              <Mail className="w-3 h-3" />
+                              {order.restaurant.email}
                             </p>
                           )}
                         </div>
@@ -642,10 +774,10 @@ export default function OrderManagement() {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap justify-end gap-2 mt-4">
+                      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-end gap-2 mt-4">
                         <button
                           onClick={() => handleAction(order, 'view')}
-                          className="px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+                          className="w-full sm:w-auto px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
                         >
                           Voir les détails
                         </button>
@@ -653,13 +785,13 @@ export default function OrderManagement() {
                           <>
                             <button
                               onClick={() => handleAction(order, 'accept')}
-                              className="px-4 py-2 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition"
+                              className="w-full sm:w-auto px-4 py-2 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition"
                             >
                               Accepter
                             </button>
                             <button
                               onClick={() => handleAction(order, 'decline')}
-                              className="px-4 py-2 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition"
+                              className="w-full sm:w-auto px-4 py-2 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition"
                             >
                               Refuser
                             </button>
@@ -668,6 +800,203 @@ export default function OrderManagement() {
                       </div>
                     </div>
                   ))}
+                </div>
+              ) : (
+                <div className="-mx-4 sm:-mx-6 overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Commande
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Statut
+                        </th>
+                        <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Client
+                        </th>
+                        <th className="hidden lg:table-cell px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Restaurant
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Total
+                        </th>
+                        <th className="hidden xl:table-cell px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Livraison
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {filteredOrders.map((order) => (
+                        <tr key={order.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-gray-900">
+                              {order.order_number}
+                            </div>
+                            <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                              <Clock className="w-3 h-3" />
+                              {formatDate(order.created_at)}
+                            </div>
+                            <div className="mt-1 flex items-center gap-1 text-xs font-semibold text-gray-500">
+                              {order.order_type === 'delivery' ? (
+                                <>
+                                  <Truck className="w-3.5 h-3.5 text-blue-500" />
+                                  Livraison
+                                </>
+                              ) : (
+                                <>
+                                  <Package className="w-3.5 h-3.5 text-emerald-500" />
+                                  À emporter
+                                </>
+                              )}
+                            </div>
+
+                            <div className="mt-2 space-y-1 text-xs text-gray-500 md:hidden max-w-[220px]">
+                              <div className="flex items-center gap-1 truncate">
+                                <User className="w-3 h-3" />
+                                <span className="font-semibold text-gray-700">Client:</span>
+                                <span className="truncate">
+                                  {order.client
+                                    ? `${order.client.first_name} ${order.client.last_name}`
+                                    : 'N/A'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 truncate">
+                                <Store className="w-3 h-3" />
+                                <span className="font-semibold text-gray-700">Resto:</span>
+                                <span className="truncate">{order.restaurant?.name || 'N/A'}</span>
+                              </div>
+                              {order.order_type === 'delivery' && order.delivery_address && (
+                                <div className="flex items-center gap-1 truncate">
+                                  <MapPin className="w-3 h-3" />
+                                  <span className="truncate">{order.delivery_address}</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getStatusBadge(order.status)}
+                          </td>
+
+                          <td className="hidden md:table-cell px-6 py-4">
+                            <div className="text-sm font-semibold text-gray-900">
+                              {order.client
+                                ? `${order.client.first_name} ${order.client.last_name}`
+                                : 'N/A'}
+                            </div>
+                            {order.client?.phone_number && (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                                <Phone className="w-3 h-3" />
+                                {order.client.phone_number}
+                              </div>
+                            )}
+                            {order.client?.email && (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-gray-500 truncate max-w-[260px]">
+                                <Mail className="w-3 h-3" />
+                                {order.client.email}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="hidden lg:table-cell px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              {order.restaurant?.image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={order.restaurant.image_url}
+                                  alt={order.restaurant.name || 'Restaurant'}
+                                  className="w-8 h-8 rounded-lg object-cover border border-gray-200"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                  <Store className="w-4 h-4 text-gray-400" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-gray-900 truncate max-w-[240px]">
+                                  {order.restaurant?.name || 'N/A'}
+                                </div>
+                                {order.restaurant?.phone_number && (
+                                  <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
+                                    <Phone className="w-3 h-3" />
+                                    {order.restaurant.phone_number}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {order.restaurant?.address && (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-gray-500 truncate max-w-[320px]">
+                                <MapPin className="w-3 h-3" />
+                                {order.restaurant.address}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-green-600">
+                              {formatCurrency(order.total_amount ?? 0)}
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              {getPaymentMethodLabel(order.payment_method)}
+                            </div>
+                          </td>
+
+                          <td className="hidden xl:table-cell px-6 py-4 max-w-[320px]">
+                            {order.order_type === 'delivery' ? (
+                              <>
+                                {order.delivery_address ? (
+                                  <div className="text-xs text-gray-600 truncate">
+                                    {order.delivery_address}
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-gray-400">Sans adresse</div>
+                                )}
+                                {order.estimated_delivery_time && (
+                                  <div className="mt-1 text-xs text-gray-500">
+                                    Prévu: {order.estimated_delivery_time}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-xs text-gray-500">À emporter</div>
+                            )}
+                          </td>
+
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className="inline-flex flex-col items-stretch sm:flex-row sm:items-center gap-2">
+                              <button
+                                onClick={() => handleAction(order, 'view')}
+                                className="w-full sm:w-auto px-3 py-2 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition inline-flex items-center justify-center gap-1"
+                              >
+                                <Eye className="w-4 h-4" />
+                                Détails
+                              </button>
+                              {order.status === 'pending' && (
+                                <>
+                                  <button
+                                    onClick={() => handleAction(order, 'accept')}
+                                    className="w-full sm:w-auto px-3 py-2 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition"
+                                  >
+                                    Accepter
+                                  </button>
+                                  <button
+                                    onClick={() => handleAction(order, 'decline')}
+                                    className="w-full sm:w-auto px-3 py-2 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition"
+                                  >
+                                    Refuser
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
@@ -871,19 +1200,32 @@ export default function OrderManagement() {
                         <User className="w-4 h-4 mr-2" />
                         Client
                       </h4>
-                      {selectedOrder.client && (
+                      {selectedOrder.client ? (
                         <div className="space-y-1">
                           <p className="text-sm text-gray-900">
                             {selectedOrder.client.first_name} {selectedOrder.client.last_name}
                           </p>
-                          <p className="text-sm text-gray-600 flex items-center">
-                            <Phone className="w-3 h-3 mr-1" />
-                            {selectedOrder.client.phone_number}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {selectedOrder.client.email}
-                          </p>
+                          {selectedOrder.client.phone_number && (
+                            <p className="text-sm text-gray-600 flex items-center">
+                              <Phone className="w-3 h-3 mr-1" />
+                              {selectedOrder.client.phone_number}
+                            </p>
+                          )}
+                          {selectedOrder.client.email && (
+                            <p className="text-sm text-gray-600 flex items-center truncate">
+                              <Mail className="w-3 h-3 mr-1" />
+                              {selectedOrder.client.email}
+                            </p>
+                          )}
+                          {selectedOrder.client.address && (
+                            <p className="text-sm text-gray-600 flex items-center truncate">
+                              <MapPin className="w-3 h-3 mr-1" />
+                              {selectedOrder.client.address}
+                            </p>
+                          )}
                         </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">N/A</p>
                       )}
                     </div>
 
@@ -892,16 +1234,32 @@ export default function OrderManagement() {
                         <Store className="w-4 h-4 mr-2" />
                         Restaurant
                       </h4>
-                      {selectedOrder.restaurant && (
+                      {selectedOrder.restaurant ? (
                         <div className="space-y-1">
                           <p className="text-sm text-gray-900">
                             {selectedOrder.restaurant.name}
                           </p>
-                          <p className="text-sm text-gray-600 flex items-center">
-                            <MapPin className="w-3 h-3 mr-1" />
-                            {selectedOrder.restaurant.address}
-                          </p>
+                          {selectedOrder.restaurant.address && (
+                            <p className="text-sm text-gray-600 flex items-center">
+                              <MapPin className="w-3 h-3 mr-1" />
+                              {selectedOrder.restaurant.address}
+                            </p>
+                          )}
+                          {selectedOrder.restaurant.phone_number && (
+                            <p className="text-sm text-gray-600 flex items-center">
+                              <Phone className="w-3 h-3 mr-1" />
+                              {selectedOrder.restaurant.phone_number}
+                            </p>
+                          )}
+                          {selectedOrder.restaurant.email && (
+                            <p className="text-sm text-gray-600 flex items-center truncate">
+                              <Mail className="w-3 h-3 mr-1" />
+                              {selectedOrder.restaurant.email}
+                            </p>
+                          )}
                         </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">N/A</p>
                       )}
                     </div>
                   </div>

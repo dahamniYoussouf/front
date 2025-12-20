@@ -1,20 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Heart,
   Star,
   MapPin,
-  Trash2,
-  Edit,
   Search,
   AlertCircle,
   Store,
   UtensilsCrossed,
   Tag,
   StickyNote,
-  ArrowLeft
+  Layers,
+  LayoutGrid,
+  Users
 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
@@ -24,93 +23,101 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 interface Restaurant {
   id: string;
   name: string;
-  description: string;
-  address: string;
-  rating: number;
-  image_url: string;
-  is_premium: boolean;
-  status: string;
+  description?: string;
+  address?: string;
+  rating?: number;
+  image_url?: string;
+  is_premium?: boolean;
+  status?: string;
+}
+
+interface ClientInfo {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone_number?: string;
 }
 
 interface FavoriteRestaurant {
-  favorite_uuid: string;
-  notes: string;
-  tags: string[];
-  added_at: string;
+  id?: string;
+  favorite_uuid?: string;
+  notes?: string;
+  tags?: string[];
+  created_at?: string;
+  added_at?: string;
   restaurant: Restaurant;
-  client?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone_number: string;
-  };
+  client?: ClientInfo;
 }
 
 interface MenuItem {
   id: string;
   nom: string;
-  description: string;
-  prix: number;
-  photo_url: string;
-  category_id: string;
+  description?: string;
+  prix?: number;
+  photo_url?: string;
+  category_id?: string;
 }
 
 interface FavoriteMeal {
-  favorite_uuid: string;
-  customizations: string;
-  notes: string;
-  createdAt: string;
+  id?: string;
+  favorite_uuid?: string;
+  customizations?: string;
+  notes?: string;
+  created_at?: string;
+  createdAt?: string;
   meal: MenuItem & {
-    restaurant: {
+    restaurant?: {
       id: string;
       name: string;
-      address: string;
-      rating: number;
-      image_url: string;
+      address?: string;
+      rating?: number;
+      image_url?: string;
     };
   };
-  client?: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    phone_number: string;
-  };
+  client?: ClientInfo;
 }
 
 type TabType = 'restaurants' | 'meals';
-type ModalType = '' | 'edit-restaurant' | 'edit-meal' | 'delete';
+type ViewMode = 'grouped' | 'flat';
+
+const getFavoriteKey = (fav: { id?: string; favorite_uuid?: string }, fallback: string) =>
+  fav.id || fav.favorite_uuid || fallback;
+
+const getFavoriteDate = (fav: { created_at?: string; added_at?: string; createdAt?: string }) =>
+  fav.added_at || fav.created_at || fav.createdAt || '';
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (!Number.isFinite(date.getTime())) return '';
+  return date.toLocaleDateString('fr-FR', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
 
 export default function ClientFavorites() {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('restaurants');
+  const [viewMode, setViewMode] = useState<ViewMode>('grouped');
   const [favoriteRestaurants, setFavoriteRestaurants] = useState<FavoriteRestaurant[]>([]);
   const [favoriteMeals, setFavoriteMeals] = useState<FavoriteMeal[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterTag, setFilterTag] = useState<string>('all');
-  const [showModal, setShowModal] = useState<boolean>(false);
-  const [modalType, setModalType] = useState<ModalType>('');
-  const [selectedItem, setSelectedItem] = useState<FavoriteRestaurant | FavoriteMeal | null>(null);
-  const [editFormData, setEditFormData] = useState<any>({});
-  const [saveLoading, setSaveLoading] = useState<boolean>(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // Récupérer les favoris
-  useEffect(() => {
-    fetchFavorites();
-  }, [activeTab]);
-
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
 
-      const token = localStorage.getItem('access_token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
       if (!token) {
         setError('Non authentifié. Veuillez vous reconnecter.');
-        setLoading(false);
         return;
       }
 
@@ -139,13 +146,17 @@ export default function ClientFavorites() {
           setFavoriteMeals(data.data || []);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erreur fetch favoris:', err);
-      setError(err?.message || 'Impossible de charger les favoris');
+      setError(err instanceof Error ? err.message : 'Impossible de charger les favoris');
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchFavorites();
+  }, [fetchFavorites]);
 
   // Filtrer les favoris
   const filteredRestaurants = favoriteRestaurants.filter((fav) => {
@@ -164,7 +175,7 @@ export default function ClientFavorites() {
     const search = searchTerm.toLowerCase();
     return (
       fav.meal.nom.toLowerCase().includes(search) ||
-      fav.meal.restaurant.name.toLowerCase().includes(search) ||
+      (fav.meal.restaurant?.name || '').toLowerCase().includes(search) ||
       fav.notes?.toLowerCase().includes(search)
     );
   });
@@ -174,7 +185,80 @@ export default function ClientFavorites() {
     new Set(favoriteRestaurants.flatMap(fav => fav.tags || []))
   );
 
+  const restaurantGroups = useMemo(() => {
+    const map = new Map<
+      string,
+      { restaurant: Restaurant; favorites: FavoriteRestaurant[]; clientsCount: number; tags: string[] }
+    >();
+
+    for (const fav of filteredRestaurants) {
+      const restaurant = fav.restaurant;
+      if (!restaurant?.id) continue;
+
+      const key = restaurant.id;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          restaurant,
+          favorites: [fav],
+          clientsCount: fav.client?.id ? 1 : 0,
+          tags: fav.tags ? [...fav.tags] : []
+        });
+        continue;
+      }
+
+      existing.favorites.push(fav);
+      if (fav.client?.id && !existing.favorites.some((f) => f !== fav && f.client?.id === fav.client?.id)) {
+        existing.clientsCount += 1;
+      }
+      if (fav.tags) existing.tags.push(...fav.tags);
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (b.favorites.length !== a.favorites.length) return b.favorites.length - a.favorites.length;
+      return (a.restaurant.name || '').localeCompare(b.restaurant.name || '');
+    });
+  }, [filteredRestaurants]);
+
+  const mealGroups = useMemo(() => {
+    const map = new Map<
+      string,
+      { meal: FavoriteMeal['meal']; favorites: FavoriteMeal[]; clientsCount: number }
+    >();
+
+    for (const fav of filteredMeals) {
+      const meal = fav.meal;
+      if (!meal?.id) continue;
+
+      const key = meal.id;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          meal,
+          favorites: [fav],
+          clientsCount: fav.client?.id ? 1 : 0
+        });
+        continue;
+      }
+
+      existing.favorites.push(fav);
+      if (fav.client?.id && !existing.favorites.some((f) => f !== fav && f.client?.id === fav.client?.id)) {
+        existing.clientsCount += 1;
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (b.favorites.length !== a.favorites.length) return b.favorites.length - a.favorites.length;
+      return (a.meal.nom || '').localeCompare(b.meal.nom || '');
+    });
+  }, [filteredMeals]);
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   // Gérer les actions
+  /*
   const handleEdit = (item: FavoriteRestaurant | FavoriteMeal) => {
     setSelectedItem(item);
     
@@ -293,6 +377,7 @@ export default function ClientFavorites() {
       day: 'numeric'
     });
   };
+  */
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -361,7 +446,7 @@ export default function ClientFavorites() {
           )}
 
           {/* Barre de recherche et filtres */}
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -377,7 +462,7 @@ export default function ClientFavorites() {
               <select
                 value={filterTag}
                 onChange={(e) => setFilterTag(e.target.value)}
-                className="w-full sm:w-56 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none bg-white"
+                className="w-full lg:w-56 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none bg-white"
               >
                 <option value="all">Tous les tags</option>
                 {allTags.map((tag) => (
@@ -387,6 +472,33 @@ export default function ClientFavorites() {
 ))}
               </select>
             )}
+
+            <div className="flex gap-2 w-full lg:w-auto">
+              <button
+                type="button"
+                onClick={() => setViewMode('grouped')}
+                className={`flex-1 lg:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold border transition-colors ${
+                  viewMode === 'grouped'
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                Groupé
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('flat')}
+                className={`flex-1 lg:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold border transition-colors ${
+                  viewMode === 'flat'
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+                Détail
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -398,11 +510,144 @@ export default function ClientFavorites() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
           </div>
         ) : activeTab === 'restaurants' ? (
-          // Liste des restaurants favoris
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          viewMode === 'grouped' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {restaurantGroups.map((group) => {
+                const restaurant = group.restaurant;
+                const isExpanded = !!expandedGroups[restaurant.id];
+                const uniqueTags = Array.from(new Set(group.tags)).slice(0, 6);
+
+                return (
+                  <div
+                    key={restaurant.id}
+                    className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden"
+                  >
+                    <div className="relative h-36">
+                      <img
+                        src={restaurant.image_url || 'https://via.placeholder.com/400x300?text=Restaurant'}
+                        alt={restaurant.name}
+                        className="w-full h-full object-cover"
+                      />
+                      {restaurant.is_premium && (
+                        <span className="absolute top-2 left-2 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded">
+                          PREMIUM
+                        </span>
+                      )}
+                      <span className="absolute top-2 right-2 bg-white/90 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">
+                        {group.favorites.length} fav
+                      </span>
+                    </div>
+
+                    <div className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-base font-semibold text-gray-900 mb-1 line-clamp-1">
+                          {restaurant.name}
+                        </h3>
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded-full">
+                          <Users className="w-3.5 h-3.5" />
+                          {group.clientsCount}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 mb-1.5">
+                        <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                        <span className="text-xs font-medium text-gray-700">
+                          {restaurant.rating || 'N/A'}
+                        </span>
+                      </div>
+
+                      {restaurant.address && (
+                        <div className="flex items-start gap-1.5 text-xs text-gray-500 mb-2">
+                          <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">{restaurant.address}</span>
+                        </div>
+                      )}
+
+                      {uniqueTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {uniqueTags.map((tag) => (
+                            <span
+                              key={`${restaurant.id}-${tag}`}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full"
+                            >
+                              <Tag className="w-2.5 h-2.5" />
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(restaurant.id)}
+                          className="text-xs font-semibold text-red-600 hover:underline"
+                        >
+                          {isExpanded ? 'Masquer les détails' : 'Voir les détails'}
+                        </button>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="mt-3 border-t pt-3 space-y-2">
+                          {group.favorites
+                            .slice()
+                            .sort((a, b) => (getFavoriteDate(b) || '').localeCompare(getFavoriteDate(a) || ''))
+                            .slice(0, 5)
+                            .map((fav, idx) => {
+                              const key = getFavoriteKey(fav, `${restaurant.id}-${idx}`);
+                              const clientName = fav.client
+                                ? `${fav.client.first_name} ${fav.client.last_name}`
+                                : 'Client';
+
+                              return (
+                                <div key={key} className="rounded border border-gray-100 p-2 bg-gray-50">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-semibold text-gray-900 truncate">
+                                        {clientName}
+                                      </div>
+                                      {fav.client?.email && (
+                                        <div className="text-xs text-gray-500 truncate">{fav.client.email}</div>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-gray-400 whitespace-nowrap">
+                                      {formatDate(getFavoriteDate(fav))}
+                                    </div>
+                                  </div>
+
+                                  {fav.notes && (
+                                    <div className="mt-2 flex items-start gap-1.5 text-xs text-gray-600 bg-white p-2 rounded border border-gray-200">
+                                      <StickyNote className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                      <p className="line-clamp-3">{fav.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          {group.favorites.length > 5 && (
+                            <div className="text-xs text-gray-500">+{group.favorites.length - 5} autres</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {restaurantGroups.length === 0 && (
+                <div className="col-span-full text-center py-12">
+                  <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun restaurant favori</h3>
+                  <p className="text-gray-500">Commencez à ajouter des restaurants à vos favoris</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Liste des restaurants favoris
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredRestaurants.map((fav, idx) => {
               // Use favorite_uuid as primary key, fallback to unique combination
-              const uniqueKey = fav.favorite_uuid || `${fav.restaurant?.id}-${fav.client?.id}-${idx}`;
+              const uniqueKey = getFavoriteKey(fav, `${fav.restaurant?.id}-${fav.client?.id}-${idx}`);
 
               return (
                 <div
@@ -469,7 +714,7 @@ export default function ClientFavorites() {
                   )}
                   
                   <div className="flex items-center justify-between text-xs text-gray-400">
-                    <span className="truncate">Ajouté le {fav.added_at}</span>
+                    <span className="truncate">Ajouté le {formatDate(getFavoriteDate(fav))}</span>
                   </div>
                   
                  
@@ -490,12 +735,133 @@ export default function ClientFavorites() {
               </div>
             )}
           </div>
+          )
         ) : (
-          // Liste des plats favoris
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          viewMode === 'grouped' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {mealGroups.map((group) => {
+                const meal = group.meal;
+                const isExpanded = !!expandedGroups[meal.id];
+                const restaurantName = meal.restaurant?.name ?? 'Restaurant';
+
+                return (
+                  <div
+                    key={meal.id}
+                    className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden"
+                  >
+                    <div className="relative h-36">
+                      <img
+                        src={meal.photo_url || 'https://via.placeholder.com/400x300?text=Meal'}
+                        alt={meal.nom}
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute top-2 right-2 bg-white/90 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">
+                        {group.favorites.length} fav
+                      </span>
+                    </div>
+
+                    <div className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-base font-semibold text-gray-900 mb-1 line-clamp-1">
+                          {meal.nom}
+                        </h3>
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded-full">
+                          <Users className="w-3.5 h-3.5" />
+                          {group.clientsCount}
+                        </span>
+                      </div>
+
+                      <p className="text-xl font-bold text-red-600 mb-1.5">{meal.prix} DA</p>
+
+                      {meal.description && (
+                        <p className="text-xs text-gray-600 mb-2 line-clamp-2">{meal.description}</p>
+                      )}
+
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2 pb-2 border-b">
+                        <Store className="w-3.5 h-3.5" />
+                        <span className="font-medium truncate">{restaurantName}</span>
+                      </div>
+
+                      <div className="flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(meal.id)}
+                          className="text-xs font-semibold text-red-600 hover:underline"
+                        >
+                          {isExpanded ? 'Masquer les détails' : 'Voir les détails'}
+                        </button>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="mt-3 border-t pt-3 space-y-2">
+                          {group.favorites
+                            .slice()
+                            .sort((a, b) => (getFavoriteDate(b) || '').localeCompare(getFavoriteDate(a) || ''))
+                            .slice(0, 5)
+                            .map((fav, idx) => {
+                              const key = getFavoriteKey(fav, `${meal.id}-${idx}`);
+                              const clientName = fav.client
+                                ? `${fav.client.first_name} ${fav.client.last_name}`
+                                : 'Client';
+
+                              return (
+                                <div key={key} className="rounded border border-gray-100 p-2 bg-gray-50">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-semibold text-gray-900 truncate">
+                                        {clientName}
+                                      </div>
+                                      {fav.client?.email && (
+                                        <div className="text-xs text-gray-500 truncate">{fav.client.email}</div>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-gray-400 whitespace-nowrap">
+                                      {formatDate(getFavoriteDate(fav))}
+                                    </div>
+                                  </div>
+
+                                  {fav.customizations && (
+                                    <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">
+                                      <p className="text-xs font-medium text-yellow-800 mb-0.5">
+                                        Personnalisations:
+                                      </p>
+                                      <p className="text-xs text-yellow-700 line-clamp-2">{fav.customizations}</p>
+                                    </div>
+                                  )}
+
+                                  {fav.notes && (
+                                    <div className="mt-2 flex items-start gap-1.5 text-xs text-gray-600 bg-white p-2 rounded border border-gray-200">
+                                      <StickyNote className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                      <p className="line-clamp-3">{fav.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          {group.favorites.length > 5 && (
+                            <div className="text-xs text-gray-500">+{group.favorites.length - 5} autres</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {mealGroups.length === 0 && (
+                <div className="col-span-full text-center py-12">
+                  <UtensilsCrossed className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun plat favori</h3>
+                  <p className="text-gray-500">Commencez à ajouter des plats à vos favoris</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Liste des plats favoris
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredMeals.map((fav, idx) => {
               // Use favorite_uuid as primary key, fallback to unique combination
-              const uniqueKey = fav.favorite_uuid || `${fav.meal?.id}-${fav.client?.id}-${idx}`;
+              const uniqueKey = getFavoriteKey(fav, `${fav.meal?.id}-${fav.client?.id}-${idx}`);
 
               return (
                 <div
@@ -553,7 +919,7 @@ export default function ClientFavorites() {
                   )}
                   
                   <div className="flex items-center justify-between text-xs text-gray-400">
-                    <span className="truncate">Ajouté le {fav.createdAt}</span>
+                    <span className="truncate">Ajouté le {formatDate(getFavoriteDate(fav))}</span>
                   </div>
                   
                   
@@ -574,11 +940,12 @@ export default function ClientFavorites() {
               </div>
             )}
           </div>
+          )
         )}
       </div>
 
       {/* Modal */}
-      {showModal && selectedItem && (
+      {/*
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -602,7 +969,7 @@ export default function ClientFavorites() {
            
           </div>
         </div>
-      )}
+      */}
     </div>
   );
 }

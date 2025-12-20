@@ -2,7 +2,6 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
 
 interface User {
   id: string;
@@ -56,6 +55,104 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  // Global fetch interceptor: auto refresh access token on 401
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    const originalFetch = window.fetch.bind(window);
+    let refreshPromise: Promise<string | null> | null = null;
+
+    const clearSession = () => {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
+    };
+
+    const refreshAccessToken = async (): Promise<string | null> => {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) return null;
+
+      const response = await originalFetch(`${apiBase}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+
+      if (!response.ok) {
+        clearSession();
+        return null;
+      }
+
+      const data = await response.json().catch(() => null);
+      const nextToken = data?.access_token as string | undefined;
+      if (!nextToken) {
+        clearSession();
+        return null;
+      }
+
+      localStorage.setItem('access_token', nextToken);
+      localStorage.setItem('token', nextToken);
+      setToken(nextToken);
+      return nextToken;
+    };
+
+    const getUrlString = (input: RequestInfo | URL) => {
+      if (typeof input === 'string') return input;
+      if (input instanceof URL) return input.toString();
+      if (input instanceof Request) return input.url;
+      return String(input);
+    };
+
+    type RequestInitWithRetry = RequestInit & { __retry?: boolean };
+
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInitWithRetry) => {
+      const response = await originalFetch(input, init);
+      if (response.status !== 401) return response;
+
+      const url = getUrlString(input);
+      if (!url.startsWith(apiBase)) return response;
+      if (url.includes('/auth/login') || url.includes('/auth/refresh')) return response;
+
+      const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+      const hasAuthHeader = headers.has('Authorization') || headers.has('authorization');
+      if (!hasAuthHeader) return response;
+
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) return response;
+
+      const retryFlag = init?.__retry;
+      if (retryFlag) return response;
+
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => {
+          refreshPromise = null;
+        });
+      }
+
+      const newToken = await refreshPromise;
+      if (!newToken) return response;
+
+      headers.set('Authorization', `Bearer ${newToken}`);
+
+      const retryInit: RequestInitWithRetry = {
+        ...(init || {}),
+        headers,
+        __retry: true
+      };
+
+      const retryInput = input instanceof Request ? input.clone() : input;
+      return originalFetch(retryInput, retryInit);
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
   const login = async (email: string, password: string) => {
     try {
       console.log('🔐 Login attempt for:', email);
@@ -78,9 +175,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('📡 Login response status:', response.status);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Login failed' }));
-        console.error('❌ Login failed:', errorData);
-        throw new Error(errorData.message || 'Invalid email or password');
+        const raw = await response.text().catch(() => '');
+        let message = 'Invalid email or password';
+
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            message = parsed?.message || parsed?.error || message;
+            console.error('❌ Login failed:', parsed);
+          } catch {
+            message = raw;
+            console.error('❌ Login failed:', raw);
+          }
+        } else {
+          console.error('❌ Login failed: empty response body');
+        }
+
+        throw new Error(message);
       }
 
       const data = await response.json();
@@ -100,6 +211,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('💾 Storing token and user...');
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('access_token', data.access_token); // Also store as 'access_token'
+      if (data.refresh_token) {
+        localStorage.setItem('refresh_token', data.refresh_token);
+      }
       localStorage.setItem('user', JSON.stringify(data.user));
       
       // Verify storage
@@ -116,9 +230,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('✅ Login successful for:', data.user.email);
       
       return Promise.resolve();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Login error:', error);
-      throw error;
+      if (error instanceof Error) throw error;
+      throw new Error('Login failed');
     }
   };
 
@@ -126,6 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('🔓 Logging out...');
     localStorage.removeItem('token');
     localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);

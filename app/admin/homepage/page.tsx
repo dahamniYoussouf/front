@@ -237,14 +237,46 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       },
       {
         name: 'restaurant_id',
-        label: 'Restaurant (facultatif)',
+        label: 'Restaurant (optionnel)',
         type: 'select',
         placeholder: 'Sélectionnez un restaurant (optionnel)',
         searchable: true,
         options: (refs) => mapRestaurantOptions(refs)
       },
+      {
+        name: 'scope',
+        label: 'Perimetre (optionnel)',
+        type: 'select',
+        placeholder: 'Laisser vide pour auto',
+        options: [
+          { value: 'restaurant', label: 'Restaurant (tous les plats)' },
+          { value: 'menu_item', label: 'Plat (un ou plusieurs)' },
+          { value: 'global', label: 'Global (tous les restaurants)' },
+          { value: 'cart', label: 'Panier' },
+          { value: 'delivery', label: 'Livraison' }
+        ]
+      },
+      {
+        name: 'menu_item_id',
+        label: 'Plat (optionnel)',
+        type: 'select',
+        placeholder: "SAclectionnez un restaurant d'abord",
+        searchable: true,
+        options: (refs, context) => buildMenuItemOptions(refs, context)
+      },
+      {
+        name: 'menu_item_ids',
+        label: 'Plats (plusieurs IDs)',
+        type: 'textarea',
+        placeholder: 'UUID1, UUID2, ...',
+        hint: 'SAccparez les UUIDs par une virgule ou un saut de ligne'
+      },
       { name: 'discount_value', label: 'Valeur du rabais', type: 'number', placeholder: '25' },
+      { name: 'currency', label: 'Devise', type: 'text', placeholder: 'DZD' },
       { name: 'badge_text', label: 'Badge texte', type: 'text', placeholder: '-20%' },
+      { name: 'custom_message', label: 'Message (autre)', type: 'textarea', placeholder: 'Ex: Offre du jour' },
+      { name: 'buy_quantity', label: 'QuantitAc achetAce', type: 'number', placeholder: '1' },
+      { name: 'free_quantity', label: 'QuantitAc offerte', type: 'number', placeholder: '1' },
       { name: 'start_date', label: 'Début', type: 'date' },
       { name: 'end_date', label: 'Fin', type: 'date' },
       { name: 'is_active', label: 'Actif', type: 'checkbox', default: true }
@@ -458,7 +490,8 @@ export default function AdminHomepageManagement() {
 
   const moduleConfigs = useMemo(() => {
     return BASE_MODULE_CONFIGS.map((module) => {
-      if (module.key !== 'recommended') {
+      const needsMenuRefresh = module.key === 'recommended' || module.key === 'promotions';
+      if (!needsMenuRefresh) {
         return module;
       }
       return {
@@ -471,6 +504,7 @@ export default function AdminHomepageManagement() {
             ...field,
             onValueChange: (value: string | number | boolean, context: ModuleFieldOnChangeContext) => {
               context.setter('menu_item_id', '');
+              context.setter('menu_item_ids', '');
               const restaurantValue = String(value ?? '').trim();
               if (restaurantValue) {
                 fetchMenuItemsForRestaurant(restaurantValue);

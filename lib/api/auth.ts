@@ -34,12 +34,15 @@ apiClient.interceptors.response.use(
         });
 
         localStorage.setItem('access_token', response.data.access_token);
+        localStorage.setItem('token', response.data.access_token);
         originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`;
 
         return apiClient(originalRequest);
       } catch (refreshError) {
+        localStorage.removeItem('token');
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

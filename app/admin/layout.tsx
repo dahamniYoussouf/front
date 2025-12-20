@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import NotificationPopupWrapper from '@/components/NotificationPopupWrapper';
+import AdminNotificationsToolbar from '@/components/AdminNotificationsToolbar';
 import { useTheme } from '@/contexts/ThemeContext';
 
 
@@ -57,7 +58,8 @@ const AdminLayoutContent = ({
 
   // Fermer le sidebar lors du changement de route sur mobile
   useEffect(() => {
-    setSidebarOpen(false);
+    const timeoutId = window.setTimeout(() => setSidebarOpen(false), 0);
+    return () => window.clearTimeout(timeoutId);
   }, [pathname]);
 
   const homepageModuleItems = [
@@ -117,7 +119,10 @@ const AdminLayoutContent = ({
 
 
   const handleLogout = () => {
+    localStorage.removeItem('token');
     localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
     router.push('/login');
   };
 
@@ -146,14 +151,14 @@ const AdminLayoutContent = ({
       {/* Overlay pour mobile */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/75 dark:bg-black/80 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/75 dark:bg-black/80 z-[2000] lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50
+        fixed lg:static inset-y-0 left-0 z-[2010]
         w-56 lg:w-60 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -293,6 +298,7 @@ const AdminLayoutContent = ({
           </div>
           
           <div className="flex items-center gap-2 md:gap-4">
+            <AdminNotificationsToolbar />
             {/* Dark Mode Toggle */}
             <button
               onClick={toggleTheme}
@@ -321,7 +327,7 @@ const AdminLayoutContent = ({
 
       {/* Notification Popup - Only render if socket.io-client is available */}
       <NotificationPopupWrapper 
-        onViewDetails={(notificationId) => {
+        onViewDetails={() => {
           router.push(`/admin/notifications`);
         }}
       />

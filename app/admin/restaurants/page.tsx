@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import apiClient from '@/lib/api/auth';
 import {
   Plus,
   Search,
@@ -25,7 +27,7 @@ import {
 // TYPES
 // =========================
 
-type CategoryValue = 'pizza' | 'burger' | 'tacos' | 'sandwish';
+type CategoryValue = string;
 
 type StatusColor = 'yellow' | 'green' | 'red' | 'gray';
 
@@ -51,7 +53,7 @@ interface OpeningHour {
 type OpeningHours = Record<DayKey, OpeningHour>;
 
 interface Restaurant {
-  id: number;
+  id: string;
   name: string;
   email?: string;
   description?: string;
@@ -79,6 +81,13 @@ interface RestaurantFilters {
   page?: number;
   pageSize?: number;
   q?: string;
+  home_categories?: string[];
+}
+
+interface GlobalHomeCategory {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 interface NotificationState {
@@ -150,7 +159,8 @@ const api = {
         is_premium: filters.is_premium || undefined,
         page: filters.page || 1,
         pageSize: filters.pageSize || 20,
-        q: filters.q || undefined
+        q: filters.q || undefined,
+        home_categories: filters.home_categories || undefined
       };
 
       const response = await fetch(`${API_BASE_URL}/restaurant/filter`, {
@@ -175,14 +185,11 @@ const api = {
         totalPages: result.totalPages || 1,
         page: result.page || 1
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching restaurants:', error);
-      // Log more details about the error
-      if (error.message) {
-        console.error('Error message:', error.message);
-      }
-      if (error.stack) {
-        console.error('Error stack:', error.stack);
+      if (error instanceof Error) {
+        if (error.message) console.error('Error message:', error.message);
+        if (error.stack) console.error('Error stack:', error.stack);
       }
       return { data: [], count: 0, totalPages: 1, page: 1 };
     }
@@ -220,17 +227,16 @@ const api = {
         data: pendingRestaurants,
         count: pendingRestaurants.length
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching pending requests:', error);
-      // Log more details about the error
-      if (error.message) {
+      if (error instanceof Error && error.message) {
         console.error('Error message:', error.message);
       }
       return { data: [], count: 0 };
     }
   },
 
-  approveRestaurant: async (id: number) => {
+  approveRestaurant: async (id: string) => {
     try {
       const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/restaurant/update/${id}`, {
@@ -253,7 +259,7 @@ const api = {
     }
   },
 
-  rejectRestaurant: async (id: number, reason: string) => {
+  rejectRestaurant: async (id: string, reason: string) => {
     try {
       const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/restaurant/update/${id}`, {
@@ -276,7 +282,7 @@ const api = {
     }
   },
 
-  updateRestaurant: async (id: number, data: Partial<Restaurant>) => {
+  updateRestaurant: async (id: string, data: Partial<Restaurant>) => {
     try {
       const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/restaurant/update/${id}`, {
@@ -296,7 +302,7 @@ const api = {
     }
   },
 
-  deleteRestaurant: async (id: number) => {
+  deleteRestaurant: async (id: string) => {
     try {
       const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/restaurant/delete/${id}`, {
@@ -334,7 +340,7 @@ const api = {
       }
 
       return await response.json();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating restaurant:', error);
       throw error;
     }
@@ -367,12 +373,14 @@ const DAYS_OF_WEEK: { value: DayKey; label: string }[] = [
 ];
 
 export default function AdminRestaurantManagement() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>('all');
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [filteredRestaurants, setFilteredRestaurants] = useState<Restaurant[]>([]);
   const [pendingRequests, setPendingRequests] = useState<Restaurant[]>([]);
   const [filteredPendingRequests, setFilteredPendingRequests] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [updatingRestaurants, setUpdatingRestaurants] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
   const [pendingSearchQuery, setPendingSearchQuery] = useState<string>('');
@@ -382,6 +390,8 @@ export default function AdminRestaurantManagement() {
   const [filterPremium, setFilterPremium] = useState<'all' | 'premium' | 'standard'>('all');
   const [filterCategory, setFilterCategory] = useState<'all' | CategoryValue>('all');
   const [filterAddress, setFilterAddress] = useState<string>('');
+  const [globalCategories, setGlobalCategories] = useState<GlobalHomeCategory[]>([]);
+  const [globalCategoryFilter, setGlobalCategoryFilter] = useState<string>('all');
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
@@ -444,16 +454,30 @@ export default function AdminRestaurantManagement() {
   const [createFormErrors, setCreateFormErrors] = useState<Record<string, string>>({});
   const [editFormErrors, setEditFormErrors] = useState<Record<string, string>>({});
 
+  const patchRestaurantInState = (id: string, patch: Partial<Restaurant>) => {
+    setRestaurants((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setFilteredRestaurants((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  };
+
+  const setRestaurantUpdating = (id: string, isUpdating: boolean) => {
+    setUpdatingRestaurants((prev) => {
+      if (isUpdating) return { ...prev, [id]: true };
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterCategory, filterAddress, filterStatus, filterActive, filterPremium]);
+  }, [filterCategory, filterAddress, filterStatus, filterActive, filterPremium, globalCategoryFilter]);
 
   // Load data when page or filters change
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pageSize, activeTab, filterCategory, filterAddress, filterStatus, filterActive, filterPremium, debouncedSearchQuery]);
+  }, [currentPage, pageSize, activeTab, filterCategory, filterAddress, filterStatus, filterActive, filterPremium, globalCategoryFilter, debouncedSearchQuery]);
 
   // Debounce search query (2 seconds)
   useEffect(() => {
@@ -474,6 +498,24 @@ export default function AdminRestaurantManagement() {
     applyPendingSearchFilter();
   }, [pendingRequests, pendingSearchQuery]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const fetchGlobalCategories = async () => {
+      try {
+        const response = await apiClient.get('/admin/homepage/categories');
+        if (isMounted) {
+          setGlobalCategories(response.data?.data || []);
+        }
+      } catch (err) {
+        console.warn('Unable to load global categories', err);
+      }
+    };
+    fetchGlobalCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
 
   const loadData = async () => {
     setLoading(true);
@@ -486,7 +528,13 @@ export default function AdminRestaurantManagement() {
           pageSize: pageSize
         };
 
-        if (filterCategory !== 'all') apiFilters.categories = [filterCategory];
+        const categoryFilters = [
+          filterCategory !== 'all' ? filterCategory : null,
+          globalCategoryFilter !== 'all' ? globalCategoryFilter : null
+        ].filter((value): value is string => Boolean(value));
+        if (categoryFilters.length > 0) {
+          apiFilters.categories = [...new Set(categoryFilters)];
+        }
         // Include pending restaurants in "all" tab by default
         if (filterStatus !== 'all') apiFilters.status = filterStatus;
         // If status is 'all', don't filter by status (include all including pending)
@@ -664,7 +712,10 @@ setTotalPages(calculatedTotalPages);
   };
 
   // Helper functions to handle form changes with error clearing
-  const handleCreateFormChange = (field: keyof CreateRestaurantForm, value: any) => {
+  const handleCreateFormChange = <K extends keyof CreateRestaurantForm,>(
+    field: K,
+    value: CreateRestaurantForm[K]
+  ) => {
     setCreateForm(prev => ({ ...prev, [field]: value }));
     
     // Clear field error when user starts typing
@@ -698,7 +749,10 @@ setTotalPages(calculatedTotalPages);
     }
   };
 
-  const handleEditFormChange = (field: keyof EditRestaurantForm, value: any) => {
+  const handleEditFormChange = <K extends keyof EditRestaurantForm,>(
+    field: K,
+    value: EditRestaurantForm[K]
+  ) => {
     setEditForm(prev => ({ ...prev, [field]: value }));
     
     // Clear field error when user starts typing
@@ -866,12 +920,13 @@ setTotalPages(calculatedTotalPages);
       setImagePreview(null);
       setCurrentPage(1);
       loadData();
-    } catch (error: any) {
-      showNotification(error?.message || 'Erreur lors de la création', 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : undefined;
+      showNotification(message || 'Erreur lors de la création', 'error');
     }
   };
 
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (id: string) => {
     if (confirm('Approuver ce restaurant ?')) {
       try {
         await api.approveRestaurant(id);
@@ -883,7 +938,7 @@ setTotalPages(calculatedTotalPages);
     }
   };
 
-  const handleReject = async (id: number) => {
+  const handleReject = async (id: string) => {
     const reason = prompt('Raison du rejet :');
     if (reason) {
       try {
@@ -946,7 +1001,7 @@ setTotalPages(calculatedTotalPages);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer ce restaurant ? Cette action est irréversible.')) {
       try {
         await api.deleteRestaurant(id);
@@ -964,24 +1019,32 @@ setTotalPages(calculatedTotalPages);
   };
 
   const handleToggleActive = async (restaurant: Restaurant) => {
+    if (updatingRestaurants[restaurant.id]) return;
+    const nextIsActive = !restaurant.is_active;
+    patchRestaurantInState(restaurant.id, { is_active: nextIsActive });
+    setRestaurantUpdating(restaurant.id, true);
     try {
-      await api.updateRestaurant(restaurant.id, {
-        is_active: !restaurant.is_active
-      });
-      loadData();
+      await api.updateRestaurant(restaurant.id, { is_active: nextIsActive });
     } catch {
+      patchRestaurantInState(restaurant.id, { is_active: restaurant.is_active });
       showNotification('Erreur lors de la mise à jour', 'error');
+    } finally {
+      setRestaurantUpdating(restaurant.id, false);
     }
   };
 
   const handleTogglePremium = async (restaurant: Restaurant) => {
+    if (updatingRestaurants[restaurant.id]) return;
+    const nextIsPremium = !restaurant.is_premium;
+    patchRestaurantInState(restaurant.id, { is_premium: nextIsPremium });
+    setRestaurantUpdating(restaurant.id, true);
     try {
-      await api.updateRestaurant(restaurant.id, {
-        is_premium: !restaurant.is_premium
-      });
-      loadData();
+      await api.updateRestaurant(restaurant.id, { is_premium: nextIsPremium });
     } catch {
+      patchRestaurantInState(restaurant.id, { is_premium: restaurant.is_premium });
       showNotification('Erreur lors de la mise à jour', 'error');
+    } finally {
+      setRestaurantUpdating(restaurant.id, false);
     }
   };
 
@@ -991,6 +1054,7 @@ setTotalPages(calculatedTotalPages);
     setFilterActive('all');
     setFilterPremium('all');
     setFilterCategory('all');
+    setGlobalCategoryFilter('all');
     setFilterAddress('');
     setCurrentPage(1);
   };
@@ -1026,7 +1090,7 @@ setTotalPages(calculatedTotalPages);
       const maxVisiblePages = 5;
 
       let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+      const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
       if (endPage - startPage < maxVisiblePages - 1) {
         startPage = Math.max(1, endPage - maxVisiblePages + 1);
@@ -1248,6 +1312,7 @@ setTotalPages(calculatedTotalPages);
                     <input
                       type="checkbox"
                       checked={restaurant.is_active}
+                      disabled={Boolean(updatingRestaurants[restaurant.id])}
                       onChange={() => handleToggleActive(restaurant)}
                       className="sr-only"
                     />
@@ -1269,6 +1334,7 @@ setTotalPages(calculatedTotalPages);
                     <input
                       type="checkbox"
                       checked={restaurant.is_premium}
+                      disabled={Boolean(updatingRestaurants[restaurant.id])}
                       onChange={() => handleTogglePremium(restaurant)}
                       className="sr-only"
                     />
@@ -1285,6 +1351,13 @@ setTotalPages(calculatedTotalPages);
 
               {/* Boutons d'action */}
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => router.push(`/admin/restaurants/${restaurant.id}`)}
+                  className="text-emerald-600 hover:text-emerald-900 p-1.5 rounded-lg hover:bg-emerald-50 transition-colors"
+                  title="Voir le menu"
+                >
+                  <UtensilsCrossed className="w-4 h-4" />
+                </button>
                 <button
                   onClick={() => handleViewDetails(restaurant)}
                   className="text-gray-600 hover:text-gray-900 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
@@ -1504,6 +1577,23 @@ setTotalPages(calculatedTotalPages);
                 ))}
               </select>
 
+              {/* Global Category Filter */}
+              <div className="flex flex-col">
+              
+                <select
+                  value={globalCategoryFilter}
+                  onChange={(e) => setGlobalCategoryFilter(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="all">Toutes les catégories globales</option>
+                  {globalCategories.map((cat) => (
+                    <option key={cat.id} value={cat.slug}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Status Filter */}
               <select
                 value={filterStatus}
@@ -1596,7 +1686,7 @@ setTotalPages(calculatedTotalPages);
               Demandes en attente
             </h2>
             <p className="text-gray-600 mb-4">
-              Consultez et gérez les demandes d'inscription des nouveaux
+              Consultez et gérez les demandes d&apos;inscription des nouveaux
               restaurants.
             </p>
             
@@ -2690,7 +2780,7 @@ setTotalPages(calculatedTotalPages);
                 {/* Opening Hours */}
                 <details className="bg-gray-50 p-4 rounded-lg">
                   <summary className="text-lg font-semibold cursor-pointer">
-                    Horaires d'ouverture (optionnel)
+                    Horaires d&apos;ouverture (optionnel)
                   </summary>
                   <div className="mt-4 space-y-3">
                     {DAYS_OF_WEEK.map(day => (

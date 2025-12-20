@@ -792,12 +792,108 @@ export default function AdminNotifications() {
                   {selectedNotification.order_details && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Détails de la Commande
+                        Détails de la commande
                       </label>
-                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
-                        <pre className="text-xs text-gray-700 whitespace-pre-wrap">
-                          {JSON.stringify(selectedNotification.order_details, null, 2)}
-                        </pre>
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                          {selectedNotification.order_details?.order_number && (
+                            <div>
+                              <p className="text-xs text-gray-500">Commande</p>
+                              <p className="font-semibold text-gray-900">
+                                {selectedNotification.order_details.order_number}
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.order_details?.order_type && (
+                            <div>
+                              <p className="text-xs text-gray-500">Type</p>
+                              <p className="font-semibold text-gray-900">
+                                {selectedNotification.order_details.order_type}
+                              </p>
+                            </div>
+                          )}
+                          {(selectedNotification.order_details?.total_amount ?? null) !== null && (
+                            <div>
+                              <p className="text-xs text-gray-500">Montant</p>
+                              <p className="font-semibold text-gray-900">
+                                {selectedNotification.order_details.total_amount} DA
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.order_details?.created_at && (
+                            <div>
+                              <p className="text-xs text-gray-500">Créée</p>
+                              <p className="font-semibold text-gray-900">
+                                {formatDate(selectedNotification.order_details.created_at)}
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.order_details?.delivery_address && (
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-gray-500">Adresse de livraison</p>
+                              <p className="font-semibold text-gray-900 break-words">
+                                {selectedNotification.order_details.delivery_address}
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.order_details?.client?.name && (
+                            <div>
+                              <p className="text-xs text-gray-500">Client</p>
+                              <p className="font-semibold text-gray-900">
+                                {selectedNotification.order_details.client.name}
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.order_details?.client?.phone && (
+                            <div>
+                              <p className="text-xs text-gray-500">Téléphone</p>
+                              <p className="font-semibold text-gray-900">
+                                {selectedNotification.order_details.client.phone}
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.order_details?.client?.address && (
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-gray-500">Adresse client</p>
+                              <p className="font-semibold text-gray-900 break-words">
+                                {selectedNotification.order_details.client.address}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {Array.isArray(selectedNotification.order_details?.items) &&
+                          selectedNotification.order_details.items.length > 0 && (
+                            <div className="mt-4 border-t border-gray-200 pt-4">
+                              <p className="text-xs font-medium text-gray-500 mb-3">Articles</p>
+                              <div className="space-y-2">
+                                {selectedNotification.order_details.items.map((item: any, index: number) => (
+                                  <div
+                                    key={`${item?.name || 'item'}-${index}`}
+                                    className="flex items-start justify-between gap-3"
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 break-words">
+                                        {item?.name || 'Article'}
+                                      </p>
+                                      {(item?.quantity || item?.price) && (
+                                        <p className="text-xs text-gray-500">
+                                          {item?.quantity ? `Qté: ${item.quantity}` : null}
+                                          {item?.quantity && item?.price ? ' • ' : null}
+                                          {item?.price ? `Prix: ${item.price} DA` : null}
+                                        </p>
+                                      )}
+                                    </div>
+                                    {item?.total !== undefined && item?.total !== null && (
+                                      <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+                                        {item.total} DA
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                       </div>
                     </div>
                   )}
@@ -807,10 +903,41 @@ export default function AdminNotifications() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Informations Restaurant
                       </label>
-                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
-                        <pre className="text-xs text-gray-700 whitespace-pre-wrap">
-                          {JSON.stringify(selectedNotification.restaurant_info, null, 2)}
-                        </pre>
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                          {selectedNotification.restaurant_info?.name && (
+                            <div>
+                              <p className="text-xs text-gray-500">Restaurant</p>
+                              <p className="font-semibold text-gray-900">
+                                {selectedNotification.restaurant_info.name}
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.restaurant_info?.phone && (
+                            <div>
+                              <p className="text-xs text-gray-500">Téléphone</p>
+                              <p className="font-semibold text-gray-900">
+                                {selectedNotification.restaurant_info.phone}
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.restaurant_info?.email && (
+                            <div>
+                              <p className="text-xs text-gray-500">Email</p>
+                              <p className="font-semibold text-gray-900 break-words">
+                                {selectedNotification.restaurant_info.email}
+                              </p>
+                            </div>
+                          )}
+                          {selectedNotification.restaurant_info?.address && (
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-gray-500">Adresse</p>
+                              <p className="font-semibold text-gray-900 break-words">
+                                {selectedNotification.restaurant_info.address}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

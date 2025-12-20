@@ -1763,7 +1763,7 @@ setTotalPages(calculatedTotalPages);
 
                 <div>
                   <label className="text-sm font-medium text-gray-700">
-                    Catégories
+                    Catégories globales
                   </label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {selectedRestaurant.categories?.map((cat, idx) => (
@@ -1771,7 +1771,9 @@ setTotalPages(calculatedTotalPages);
                         key={`${cat}-${idx}`}
                         className="px-2 py-1 bg-blue-50 text-blue-700 text-sm rounded"
                       >
-                        {cat}
+                        {globalCategories.find((entry) => entry.slug === cat)?.name ||
+                          CATEGORY_OPTIONS.find((entry) => entry.value === cat)?.label ||
+                          cat}
                       </span>
                     ))}
                   </div>
@@ -2199,10 +2201,13 @@ setTotalPages(calculatedTotalPages);
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Catégories *
+                    Catégories globales *
                   </label>
                   <div className="space-y-2">
-                    {CATEGORY_OPTIONS.map((cat) => (
+                    {(globalCategories.length > 0
+                      ? globalCategories.map((cat) => ({ value: cat.slug, label: cat.name }))
+                      : CATEGORY_OPTIONS
+                    ).map((cat) => (
                       <label
                         key={cat.value}
                         className="flex items-center gap-2 cursor-pointer"

@@ -175,6 +175,7 @@ type ModuleManagerProps = {
   config: ModuleDescriptor;
   items: ModuleItem[];
   isLoading: boolean;
+  loadError?: string;
   onRefresh: () => Promise<void>;
   fetchWithToken: AuthFetch;
   references?: ModuleManagerReferences;
@@ -184,6 +185,7 @@ export default function ModuleManager({
   config,
   items,
   isLoading,
+  loadError,
   onRefresh,
   fetchWithToken,
   references,
@@ -501,6 +503,11 @@ export default function ModuleManager({
         </div>
       </header>
       <div className="mt-4 space-y-4">
+        {loadError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-600 dark:bg-red-900/30 dark:text-red-200">
+            {loadError}
+          </div>
+        ) : null}
         {isLoading ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900/60">
             Chargement des éléments...

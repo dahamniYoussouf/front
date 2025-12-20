@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { RefreshCw, Grid, Layers, Star, Zap, Sparkles, Megaphone } from 'lucide-react';
 
 import Loader from '@/components/Loader';
@@ -14,6 +14,110 @@ import ModuleManager, {
 } from './ModuleManager';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+
+type ValidationErrorItem = { msg: string; param?: string };
+
+class ApiError extends Error {
+  status: number;
+  payload?: unknown;
+  errors?: ValidationErrorItem[];
+
+  constructor(message: string, options: { status: number; payload?: unknown; errors?: ValidationErrorItem[] }) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = options.status;
+    this.payload = options.payload;
+    this.errors = options.errors;
+  }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const coerceNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const extractValidationErrors = (payload: unknown): ValidationErrorItem[] => {
+  if (!isRecord(payload)) return [];
+
+  const rawErrors = payload.errors;
+  if (Array.isArray(rawErrors)) {
+    const result: ValidationErrorItem[] = [];
+    rawErrors.forEach((entry) => {
+      if (typeof entry === 'string') {
+        const msg = coerceNonEmptyString(entry);
+        if (msg) result.push({ msg });
+        return;
+      }
+      if (!isRecord(entry)) {
+        return;
+      }
+      const msg =
+        coerceNonEmptyString(entry.msg) ||
+        coerceNonEmptyString(entry.message) ||
+        coerceNonEmptyString(entry.error) ||
+        'Erreur de validation';
+      const param =
+        coerceNonEmptyString(entry.param) ||
+        coerceNonEmptyString(entry.path) ||
+        coerceNonEmptyString(entry.field) ||
+        undefined;
+      result.push(param ? { msg, param } : { msg });
+    });
+    return result;
+  }
+
+  if (isRecord(rawErrors)) {
+    const result: ValidationErrorItem[] = [];
+    Object.entries(rawErrors).forEach(([param, value]) => {
+      const msg = coerceNonEmptyString(value);
+      if (msg) result.push({ msg, param });
+    });
+    return result;
+  }
+
+  return [];
+};
+
+const extractBackendMessage = (payload: unknown): string | null => {
+  const directText = coerceNonEmptyString(payload);
+  if (directText) {
+    return directText;
+  }
+
+  if (!isRecord(payload)) return null;
+
+  const direct =
+    coerceNonEmptyString(payload.message) || coerceNonEmptyString(payload.error) || coerceNonEmptyString(payload.msg);
+  if (direct) return direct;
+
+  const nestedData = payload.data;
+  if (isRecord(nestedData)) {
+    const nested =
+      coerceNonEmptyString(nestedData.message) || coerceNonEmptyString(nestedData.error) || coerceNonEmptyString(nestedData.msg);
+    if (nested) return nested;
+  }
+
+  const validationErrors = extractValidationErrors(payload);
+  if (validationErrors.length) {
+    return validationErrors[0].msg;
+  }
+
+  return null;
+};
+
+const readResponseBody = async (response: Response): Promise<unknown> => {
+  const text = await response.text().catch(() => '');
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
 
 const ensureArrayPayload = (value: unknown): ModuleItem[] => {
   if (Array.isArray(value)) {
@@ -395,11 +499,11 @@ const getArray = (value: unknown) => {
 
 const fetchWithToken = async (endpoint: string, options: RequestInit = {}) => {
   if (typeof window === 'undefined') {
-    throw new Error('Client token unavailable');
+    throw new ApiError('Client token unavailable', { status: 0 });
   }
-  const token = localStorage.getItem('access_token');
+  const token = localStorage.getItem('access_token') || localStorage.getItem('token');
   if (!token) {
-    throw new Error('Vous devez vous reconnecter pour accéder à cette section');
+    throw new ApiError('Vous devez vous reconnecter pour accéder à cette section', { status: 401 });
   }
 
   const headers: Record<string, string> = {
@@ -421,18 +525,42 @@ const fetchWithToken = async (endpoint: string, options: RequestInit = {}) => {
     }
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers
+    });
+  } catch (networkError) {
+    const technical = networkError instanceof Error ? networkError.message : String(networkError);
+    throw new ApiError(`Impossible de contacter le serveur. ${technical}`.trim(), { status: 0, payload: networkError });
+  }
 
   if (response.status === 204) {
     return null;
   }
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error((payload as { message?: string }).message || 'Impossible de récupérer les données');
+  const payload = await readResponseBody(response);
+  if (typeof payload === 'string') {
+    const snippet = payload.trim().slice(0, 180);
+    const message = snippet ? `Réponse invalide du serveur: ${snippet}` : 'Réponse invalide du serveur';
+    throw new ApiError(message, { status: response.status, payload });
+  }
+
+  const validationErrors = extractValidationErrors(payload);
+  const backendMessage = extractBackendMessage(payload);
+  const hasSuccessFalse = isRecord(payload) && 'success' in payload && payload.success === false;
+
+  if (!response.ok || hasSuccessFalse) {
+    const isAuthError = response.status === 401 || response.status === 403;
+    const fallbackMessage = isAuthError ? 'Session expirée. Veuillez vous reconnecter.' : `Erreur (${response.status})`;
+    const message = backendMessage || (validationErrors.length ? 'Erreur de validation' : null) || fallbackMessage;
+
+    throw new ApiError(message, {
+      status: response.status,
+      payload,
+      errors: validationErrors.length ? validationErrors : undefined
+    });
   }
 
   return payload;
@@ -440,9 +568,11 @@ const fetchWithToken = async (endpoint: string, options: RequestInit = {}) => {
 
 export default function AdminHomepageManagement() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const selectedModuleKey = searchParams?.get('module') ?? '';
   const [moduleData, setModuleData] = useState<Record<string, ModuleItem[]>>({});
   const [moduleLoading, setModuleLoading] = useState<Record<string, boolean>>({});
+  const [moduleErrors, setModuleErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [referenceLists, setReferenceLists] = useState<{
@@ -454,22 +584,39 @@ export default function AdminHomepageManagement() {
   const [menuItemsByRestaurant, setMenuItemsByRestaurant] = useState<Record<string, ModuleItem[]>>({});
 
 
-  const loadModule = useCallback(async (config: ModuleDescriptor) => {
-    setModuleLoading((previous) => ({ ...previous, [config.key]: true }));
-    try {
-      const payload = await fetchWithToken(config.fetchEndpoint);
-      const list = getArray(payload) as ModuleItem[];
-      setModuleData((previous) => ({ ...previous, [config.key]: list }));
-    } catch (fetchError) {
-      const message = fetchError instanceof Error ? fetchError.message : `Impossible de charger ${config.title}`;
-      setError(message);
-    } finally {
-      setModuleLoading((previous) => ({ ...previous, [config.key]: false }));
-    }
-  }, []);
+  const loadModule = useCallback(
+    async (config: ModuleDescriptor) => {
+      setModuleLoading((previous) => ({ ...previous, [config.key]: true }));
+      try {
+        const payload = await fetchWithToken(config.fetchEndpoint);
+        const list = getArray(payload) as ModuleItem[];
+        setModuleData((previous) => ({ ...previous, [config.key]: list }));
+        setModuleErrors((previous) => {
+          if (!previous[config.key]) {
+            return previous;
+          }
+          const next = { ...previous };
+          delete next[config.key];
+          return next;
+        });
+      } catch (fetchError) {
+        const message =
+          fetchError instanceof Error && fetchError.message ? fetchError.message : `Impossible de charger ${config.title}`;
+        setModuleErrors((previous) => ({ ...previous, [config.key]: message }));
+
+        if (fetchError instanceof ApiError && (fetchError.status === 401 || fetchError.status === 403)) {
+          setError(message);
+          window.setTimeout(() => router.push('/login'), 1200);
+        }
+      } finally {
+        setModuleLoading((previous) => ({ ...previous, [config.key]: false }));
+      }
+    },
+    [router]
+  );
 
   const fetchMenuItemsForRestaurant = useCallback(
-    async (restaurantId: string) => {
+    async (restaurantId: string, sourceModuleKey?: string) => {
       if (!restaurantId) {
         return;
       }
@@ -480,12 +627,32 @@ export default function AdminHomepageManagement() {
           ...previous,
           [restaurantId]: list
         }));
+        if (sourceModuleKey) {
+          setModuleErrors((previous) => {
+            if (!previous[sourceModuleKey]) {
+              return previous;
+            }
+            const next = { ...previous };
+            delete next[sourceModuleKey];
+            return next;
+          });
+        }
       } catch (error) {
+        const message =
+          error instanceof Error && error.message ? error.message : 'Impossible de charger les plats du restaurant';
+        if (sourceModuleKey) {
+          setModuleErrors((previous) => ({ ...previous, [sourceModuleKey]: message }));
+        } else {
+          setError(message);
+        }
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          window.setTimeout(() => router.push('/login'), 1200);
+        }
         // eslint-disable-next-line no-console
         console.error('Erreur lors de la récupération des plats par restaurant :', error);
       }
     },
-    [fetchWithToken]
+    [router]
   );
 
   const moduleConfigs = useMemo(() => {
@@ -507,7 +674,7 @@ export default function AdminHomepageManagement() {
               context.setter('menu_item_ids', '');
               const restaurantValue = String(value ?? '').trim();
               if (restaurantValue) {
-                fetchMenuItemsForRestaurant(restaurantValue);
+                fetchMenuItemsForRestaurant(restaurantValue, module.key);
               }
             }
           };
@@ -530,6 +697,7 @@ export default function AdminHomepageManagement() {
     const loadAll = async () => {
       setLoading(true);
       setError('');
+      setModuleErrors({});
       await Promise.all(moduleConfigs.map((config) => loadModule(config)));
       if (active) {
         setLoading(false);
@@ -556,6 +724,12 @@ export default function AdminHomepageManagement() {
           restaurants: ensureArrayPayload(payload)
         });
       } catch (error) {
+        const message =
+          error instanceof Error && error.message ? error.message : 'Impossible de charger la liste des restaurants';
+        setError(message);
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          window.setTimeout(() => router.push('/login'), 1200);
+        }
         console.warn('Impossible de charger la liste des restaurants :', error);
       }
     };
@@ -618,6 +792,7 @@ export default function AdminHomepageManagement() {
                 config={module}
                 items={moduleData[module.key] ?? []}
                 isLoading={Boolean(moduleLoading[module.key])}
+                loadError={moduleErrors[module.key]}
                 onRefresh={() => loadModule(module)}
                 fetchWithToken={fetchWithToken}
                 references={combinedReferences}

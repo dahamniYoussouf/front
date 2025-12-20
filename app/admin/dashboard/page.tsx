@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import Image from 'next/image';
 import {
   ShoppingBag,
@@ -92,6 +92,60 @@ const formatMinutes = (minutes: number) => {
   const days = Math.floor(hours / 24);
   const remainingHours = hours % 24;
   return `${days}j ${remainingHours}h`;
+};
+
+type PipelineStepMeta = {
+  shortLabel: string;
+  Icon: ComponentType<{ className?: string }>;
+  iconBg: string;
+  iconText: string;
+};
+
+const getPipelineStepMeta = (key: string): PipelineStepMeta => {
+  switch (key) {
+    case 'pending_to_accepted':
+      return {
+        shortLabel: 'Accept.',
+        Icon: UserCheck,
+        iconBg: 'bg-yellow-100 dark:bg-yellow-900/30',
+        iconText: 'text-yellow-700 dark:text-yellow-300'
+      };
+    case 'accepted_to_preparing':
+      return {
+        shortLabel: 'Prépa',
+        Icon: Store,
+        iconBg: 'bg-indigo-100 dark:bg-indigo-900/30',
+        iconText: 'text-indigo-700 dark:text-indigo-300'
+      };
+    case 'preparing_to_assigned':
+      return {
+        shortLabel: 'Affect.',
+        Icon: Truck,
+        iconBg: 'bg-blue-100 dark:bg-blue-900/30',
+        iconText: 'text-blue-700 dark:text-blue-300'
+      };
+    case 'assigned_to_delivering':
+      return {
+        shortLabel: 'Départ',
+        Icon: Truck,
+        iconBg: 'bg-orange-100 dark:bg-orange-900/30',
+        iconText: 'text-orange-700 dark:text-orange-300'
+      };
+    case 'delivering_to_delivered':
+      return {
+        shortLabel: 'Livraison',
+        Icon: ShoppingBag,
+        iconBg: 'bg-green-100 dark:bg-green-900/30',
+        iconText: 'text-green-700 dark:text-green-300'
+      };
+    default:
+      return {
+        shortLabel: 'Étape',
+        Icon: Clock3,
+        iconBg: 'bg-gray-100 dark:bg-gray-700/60',
+        iconText: 'text-gray-700 dark:text-gray-300'
+      };
+  }
 };
 
 export default function AdminDashboard() {
@@ -230,6 +284,9 @@ export default function AdminDashboard() {
       </ProtectedRoute>
     );
   }
+
+  const pipeline = stats.pipeline;
+  const pipelineSteps = (pipeline?.steps ?? []).filter((step) => step.samples > 0);
 
   return (
     <ProtectedRoute>
@@ -491,39 +548,37 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {stats.pipeline && (
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900/50 hover:shadow-md dark:hover:shadow-gray-900/70 transition-shadow">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Temps moyen par étape
-                </h3>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {stats.pipeline.sample_size} commandes livrées • {stats.pipeline.period_days} derniers jours
-                </div>
+          {pipeline && pipeline.sample_size > 0 && (
+            <div
+              className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-600 dark:text-gray-400"
+              title={`${pipeline.sample_size} commande${pipeline.sample_size > 1 ? 's' : ''} - ${pipeline.period_days} derniers jours`}
+            >
+              <div className="inline-flex items-center gap-1.5">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700/60">
+                  <Clock3 className="h-3.5 w-3.5 text-gray-700 dark:text-gray-300" aria-hidden="true" />
+                </span>
+                <span>Total</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                  {formatMinutes(pipeline.total_avg_minutes)}
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                {stats.pipeline.steps.map((step) => (
-                  <div
-                    key={step.key}
-                    className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20 p-4"
-                  >
-                    <div className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                      {step.label}
-                    </div>
-                    <div className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {pipelineSteps.map((step) => {
+                const meta = getPipelineStepMeta(step.key);
+                const Icon = meta.Icon;
+
+                return (
+                  <div key={step.key} className="inline-flex items-center gap-1.5" title={step.label}>
+                    <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${meta.iconBg}`}>
+                      <Icon className={`h-3.5 w-3.5 ${meta.iconText}`} aria-hidden="true" />
+                    </span>
+                    <span>{meta.shortLabel}</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
                       {formatMinutes(step.avg_minutes)}
-                    </div>
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {step.samples} échantillons
-                    </div>
+                    </span>
                   </div>
-                ))}
-              </div>
-
-              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                Temps total moyen: <span className="font-semibold text-gray-900 dark:text-gray-100">{formatMinutes(stats.pipeline.total_avg_minutes)}</span>
-              </div>
+                );
+              })}
             </div>
           )}
         </main>

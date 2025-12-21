@@ -10,7 +10,6 @@ import {
   Users,
   MapPin,
   CheckCircle,
-  TrendingUp,
   Clock,
   DollarSign,
   Bell,
@@ -78,54 +77,43 @@ const configMetadata: Record<string, ConfigMetadata> = {
     color: 'green',
     category: 'delivery'
   },
-  'driver_search_radius': {
-    key: 'driver_search_radius',
-    title: 'Rayon de Recherche Livreurs',
-    description: 'Rayon de recherche par défaut (en mètres) pour trouver les livreurs à proximité',
+  'client_restaurant_search_radius': {
+    key: 'client_restaurant_search_radius',
+    title: 'Rayon de Recherche Restaurants (Clients)',
+    description: 'Rayon de recherche par défaut (en mètres) pour trouver les restaurants à proximité (côté client)',
     unit: 'mètres',
-    min: 1000,
-    max: 20000,
+    min: 100,
+    max: 50000,
     icon: MapPin,
-    color: 'blue',
+    color: 'green',
     category: 'delivery'
-  },
-  'max_delivery_distance': {
-    key: 'max_delivery_distance',
-    title: 'Distance Max de Livraison',
-    description: 'Distance maximale de livraison en kilomètres',
-    unit: 'km',
-    min: 1,
-    max: 100,
-    icon: MapPin,
-    color: 'purple',
-    category: 'delivery'
-  },
-  'pending_order_timeout': {
-    key: 'pending_order_timeout',
-    title: 'Délai Notification Commande',
-    description: 'Temps en minutes avant de notifier l\'admin d\'une commande en attente',
-    unit: 'minutes',
-    min: 1,
-    max: 60,
-    icon: Clock,
-    color: 'yellow',
-    category: 'orders'
   },
   'default_preparation_time': {
     key: 'default_preparation_time',
     title: 'Temps de Préparation par Défaut',
-    description: 'Temps de préparation par défaut pour les commandes en minutes',
+    description: 'Temps de préparation par défaut (en minutes) utilisé si le restaurant ne le fournit pas',
     unit: 'minutes',
     min: 5,
     max: 120,
     icon: Clock,
-    color: 'orange',
+    color: 'yellow',
     category: 'orders'
+  },
+  'pending_order_timeout': {
+    key: 'pending_order_timeout',
+    title: 'Délai Notification Commande',
+    description: 'Délai (en minutes) avant notification admin pour une commande sans réponse',
+    unit: 'minutes',
+    min: 1,
+    max: 60,
+    icon: Bell,
+    color: 'orange',
+    category: 'notifications'
   },
   'default_delivery_fee': {
     key: 'default_delivery_fee',
     title: 'Frais de Livraison par Défaut',
-    description: 'Frais de livraison par défaut en DA',
+    description: 'Frais de livraison par défaut (en DA) appliqués si non fournis lors de la création',
     unit: 'DA',
     min: 0,
     max: 10000,
@@ -133,39 +121,17 @@ const configMetadata: Record<string, ConfigMetadata> = {
     color: 'green',
     category: 'fees'
   },
-  'delivery_fee_per_km': {
-    key: 'delivery_fee_per_km',
-    title: 'Frais de Livraison par Km',
-    description: 'Frais de livraison supplémentaires par kilomètre en DA',
-    unit: 'DA/km',
-    min: 0,
-    max: 1000,
-    icon: DollarSign,
-    color: 'blue',
-    category: 'fees'
-  },
-  'platform_commission_rate': {
-    key: 'platform_commission_rate',
-    title: 'Taux de Commission Plateforme',
-    description: 'Taux de commission de la plateforme en pourcentage',
-    unit: '%',
-    min: 0,
-    max: 50,
-    icon: TrendingUp,
-    color: 'purple',
-    category: 'fees'
-  },
   'max_driver_cancellations': {
     key: 'max_driver_cancellations',
     title: 'Annulations Max Livreur',
-    description: 'Nombre maximum d\'annulations avant notification admin',
+    description: "Nombre maximum d'annulations avant alerte admin pour un livreur",
     unit: 'annulations',
     min: 1,
     max: 20,
     icon: Truck,
     color: 'red',
     category: 'drivers'
-  }
+  },
 };
 
 const categoryInfo: Record<string, { title: string; icon: any; color: string }> = {

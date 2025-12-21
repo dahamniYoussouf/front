@@ -210,6 +210,9 @@ const buildMenuItemOptions = (
     .sort((a, b) => a.label.localeCompare(b.label));
 };
 
+const getPromotionType = (state: Record<string, unknown>) => String(state.type ?? '').trim();
+const getPromotionScope = (state: Record<string, unknown>) => String(state.scope ?? '').trim();
+
 const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
   {
     key: 'categories',
@@ -342,14 +345,21 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       {
         name: 'restaurant_id',
         label: 'Restaurant (optionnel)',
+        visibleWhen: ({ state }) => {
+          const type = getPromotionType(state);
+          if (!type) return false;
+          const scope = getPromotionScope(state);
+          return ['percentage', 'amount', 'buy_x_get_y'].includes(type) || scope === 'restaurant' || scope === 'menu_item';
+        },
         type: 'select',
         placeholder: 'Sélectionnez un restaurant (optionnel)',
         searchable: true,
-        options: (refs) => mapRestaurantOptions(refs)
+        options: (refs) => mapRestaurantOptions(refs),
       },
       {
         name: 'scope',
         label: 'Perimetre (optionnel)',
+        visibleWhen: ({ state }) => Boolean(getPromotionType(state)),
         type: 'select',
         placeholder: 'Laisser vide pour auto',
         options: [
@@ -363,6 +373,12 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       {
         name: 'menu_item_id',
         label: 'Plat (optionnel)',
+        visibleWhen: ({ state }) => {
+          const type = getPromotionType(state);
+          if (!type) return false;
+          const scope = getPromotionScope(state);
+          return type === 'buy_x_get_y' || scope === 'menu_item';
+        },
         type: 'select',
         placeholder: "SAclectionnez un restaurant d'abord",
         searchable: true,
@@ -371,16 +387,55 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       {
         name: 'menu_item_ids',
         label: 'Plats (plusieurs IDs)',
+        visibleWhen: ({ state }) => {
+          const type = getPromotionType(state);
+          if (!type) return false;
+          const scope = getPromotionScope(state);
+          return type === 'percentage' || type === 'amount' || (scope === 'menu_item' && type !== 'buy_x_get_y');
+        },
         type: 'textarea',
         placeholder: 'UUID1, UUID2, ...',
         hint: 'SAccparez les UUIDs par une virgule ou un saut de ligne'
       },
-      { name: 'discount_value', label: 'Valeur du rabais', type: 'number', placeholder: '25' },
-      { name: 'currency', label: 'Devise', type: 'text', placeholder: 'DZD' },
-      { name: 'badge_text', label: 'Badge texte', type: 'text', placeholder: '-20%' },
-      { name: 'custom_message', label: 'Message (autre)', type: 'textarea', placeholder: 'Ex: Offre du jour' },
-      { name: 'buy_quantity', label: 'QuantitAc achetAce', type: 'number', placeholder: '1' },
-      { name: 'free_quantity', label: 'QuantitAc offerte', type: 'number', placeholder: '1' },
+      {
+        name: 'discount_value',
+        label: 'Valeur du rabais',
+        type: 'number',
+        placeholder: '25',
+        required: true,
+        visibleWhen: ({ state }) => {
+          const type = getPromotionType(state);
+          return type === 'percentage' || type === 'amount';
+        }
+      },
+      { name: 'currency', label: 'Devise', type: 'text', placeholder: 'DZD', visibleWhen: ({ state }) => getPromotionType(state) === 'amount' },
+      { name: 'badge_text', label: 'Badge texte', type: 'text', placeholder: '-20%', visibleWhen: ({ state }) => Boolean(getPromotionType(state)) },
+      {
+        name: 'custom_message',
+        label: 'Message (autre)',
+        type: 'textarea',
+        placeholder: 'Ex: Offre du jour',
+        visibleWhen: ({ state }) => {
+          const type = getPromotionType(state);
+          return type === 'other' || type === 'buy_x_get_y';
+        }
+      },
+      {
+        name: 'buy_quantity',
+        label: 'QuantitAc achetAce',
+        type: 'number',
+        placeholder: '1',
+        required: true,
+        visibleWhen: ({ state }) => getPromotionType(state) === 'buy_x_get_y'
+      },
+      {
+        name: 'free_quantity',
+        label: 'QuantitAc offerte',
+        type: 'number',
+        placeholder: '1',
+        required: true,
+        visibleWhen: ({ state }) => getPromotionType(state) === 'buy_x_get_y'
+      },
       { name: 'start_date', label: 'Début', type: 'date' },
       { name: 'end_date', label: 'Fin', type: 'date' },
       { name: 'is_active', label: 'Actif', type: 'checkbox', default: true }

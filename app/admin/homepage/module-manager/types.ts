@@ -18,6 +18,12 @@ export type ModuleFieldOptionContext = {
   role?: 'create' | 'edit';
 };
 
+export type ModuleFieldVisibilityContext = {
+  state: Record<string, unknown>;
+  role: 'create' | 'edit';
+  item?: ModuleItem;
+};
+
 export type ModuleFieldOnChangeContext = {
   state: Record<string, unknown>;
   setter: (name: string, value: unknown) => void;
@@ -51,6 +57,7 @@ export type ModuleFormField = {
     value: string | number | boolean,
     context: ModuleFieldOnChangeContext
   ) => void;
+  visibleWhen?: (context: ModuleFieldVisibilityContext) => boolean;
 };
 
 export type ModuleDescriptor = {

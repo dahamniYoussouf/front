@@ -280,6 +280,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       },
       {
         name: 'scope',
+        visibleWhen: ({ state }) => Boolean(String(state.type ?? '').trim()),
         label: 'Périmètre',
         type: 'select',
         options: PROMOTION_SCOPES,
@@ -288,6 +289,12 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       {
         name: 'restaurant_id',
         label: 'Restaurant (facultatif)',
+        visibleWhen: ({ state }) => {
+          const type = String(state.type ?? '').trim();
+          if (!type) return false;
+          const scope = String(state.scope ?? '').trim();
+          return ['percentage', 'amount', 'buy_x_get_y'].includes(type) || scope === 'restaurant' || scope === 'menu_item';
+        },
         type: 'select',
         placeholder: 'Sélectionnez un restaurant (optionnel)',
         searchable: true,
@@ -296,6 +303,12 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       {
         name: 'menu_item_id',
         label: 'Plat cible (optionnel)',
+        visibleWhen: ({ state }) => {
+          const type = String(state.type ?? '').trim();
+          if (!type) return false;
+          const scope = String(state.scope ?? '').trim();
+          return type === 'buy_x_get_y' || scope === 'menu_item';
+        },
         type: 'select',
         placeholder: 'Sélectionnez un plat',
         searchable: true,
@@ -304,6 +317,12 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       {
         name: 'menu_item_ids',
         label: 'ID de plats (optionnel)',
+        visibleWhen: ({ state }) => {
+          const type = String(state.type ?? '').trim();
+          if (!type) return false;
+          const scope = String(state.scope ?? '').trim();
+          return type === 'percentage' || type === 'amount' || (scope === 'menu_item' && type !== 'buy_x_get_y');
+        },
         type: 'textarea',
         hint: 'Séparez les UUIDs par une virgule ou un saut de ligne pour cibler plusieurs plats'
       },
@@ -475,7 +494,8 @@ const fetchWithToken: AuthFetch = async (endpoint: string, options: RequestInit 
         .filter(Boolean)
         .join(' • ');
     const message =
-      (payload as { message?: string }).message ||
+      (payload as { message?: string; error?: string }).message ||
+      (payload as { message?: string; error?: string }).error ||
       validationMessages ||
       'Impossible de récupérer les données';
     const error = new Error(message);

@@ -39,6 +39,97 @@ type FetchValidationError = Error & {
   errors?: ValidationPayload[];
 };
 
+const isFieldVisible = (
+  field: ModuleFormField,
+  context: { state: Record<string, unknown>; role: 'create' | 'edit'; item?: ModuleItem }
+) => {
+  if (!field.visibleWhen) {
+    return true;
+  }
+
+  try {
+    return field.visibleWhen(context);
+  } catch {
+    return true;
+  }
+};
+
+const getPromotionType = (state: Record<string, unknown>) => String(state.type ?? '').trim();
+const getPromotionScope = (state: Record<string, unknown>) => String(state.scope ?? '').trim();
+
+const isPromotionFieldVisible = (fieldName: string, state: Record<string, unknown>) => {
+  const type = getPromotionType(state);
+  const scope = getPromotionScope(state);
+  const hasType = Boolean(type);
+
+  if (fieldName === 'title' || fieldName === 'description' || fieldName === 'type') {
+    return true;
+  }
+
+  if (fieldName === 'discount_value') {
+    return type === 'percentage' || type === 'amount';
+  }
+
+  if (fieldName === 'currency') {
+    return type === 'amount';
+  }
+
+  if (fieldName === 'buy_quantity' || fieldName === 'free_quantity') {
+    return type === 'buy_x_get_y';
+  }
+
+  if (fieldName === 'custom_message') {
+    return type === 'other' || type === 'buy_x_get_y';
+  }
+
+  if (fieldName === 'restaurant_id') {
+    return (
+      hasType &&
+      (type === 'percentage' ||
+        type === 'amount' ||
+        type === 'buy_x_get_y' ||
+        scope === 'restaurant' ||
+        scope === 'menu_item')
+    );
+  }
+
+  if (fieldName === 'menu_item_id') {
+    return hasType && (type === 'buy_x_get_y' || scope === 'menu_item');
+  }
+
+  if (fieldName === 'menu_item_ids') {
+    return hasType && (type === 'percentage' || type === 'amount' || (scope === 'menu_item' && type !== 'buy_x_get_y'));
+  }
+
+  if (
+    fieldName === 'scope' ||
+    fieldName === 'badge_text' ||
+    fieldName === 'start_date' ||
+    fieldName === 'end_date' ||
+    fieldName === 'is_active'
+  ) {
+    return hasType;
+  }
+
+  return hasType;
+};
+
+const shouldRenderField = (
+  configKey: string,
+  field: ModuleFormField,
+  context: { state: Record<string, unknown>; role: 'create' | 'edit'; item?: ModuleItem }
+) => {
+  if (field.visibleWhen) {
+    return isFieldVisible(field, context);
+  }
+
+  if (configKey === 'promotions') {
+    return isPromotionFieldVisible(field.name, context.state);
+  }
+
+  return true;
+};
+
 const mapValidationErrors = (errors?: ValidationPayload[]) => {
   const result: Record<string, string> = {};
   if (!Array.isArray(errors)) {
@@ -399,7 +490,10 @@ export default function ModuleManager({
     }
     setCreateStatus(null);
     setFieldErrors({});
-    const payload = buildPayload(createState, config.fields);
+    const visibleFields = config.fields.filter((field) =>
+      shouldRenderField(config.key, field, { state: createState, role: 'create' })
+    );
+    const payload = buildPayload(createState, visibleFields);
     if (!shouldProceedWithMenuItemConflicts(payload)) {
       return;
     }
@@ -435,7 +529,10 @@ export default function ModuleManager({
     }
     setEditStatus(null);
     setFieldErrors({});
-    const payload = buildPayload(editState, config.fields);
+    const visibleFields = config.fields.filter((field) =>
+      shouldRenderField(config.key, field, { state: editState, role: 'edit', item: selectedItem })
+    );
+    const payload = buildPayload(editState, visibleFields);
     if (!Object.keys(payload).length) {
       setEditStatus({ text: 'Aucune modification à enregistrer.', variant: 'neutral' });
       return;
@@ -638,8 +735,10 @@ export default function ModuleManager({
                 handleCreate();
               }}
             >
-              {config.fields.map((field) =>
-                renderField(
+              {config.fields
+                .filter((field) => shouldRenderField(config.key, field, { state: createState, role: 'create' }))
+                .map((field) =>
+                  renderField(
                   config,
                   field,
                   createState,
@@ -652,8 +751,8 @@ export default function ModuleManager({
                   busy.create,
                   referenceData,
                   fieldHelpers
-                )
-              )}
+                  )
+                )}
               {createStatus && (
                 <p className={`text-xs ${createStatus.variant === 'error' ? 'text-red-500' : 'text-emerald-600'}`}>
                   {createStatus.text}
@@ -722,8 +821,10 @@ export default function ModuleManager({
                 handleUpdate();
               }}
             >
-              {config.fields.map((field) =>
-                renderField(
+              {config.fields
+                .filter((field) => shouldRenderField(config.key, field, { state: editState, role: 'edit', item: selectedItem }))
+                .map((field) =>
+                  renderField(
                   config,
                   field,
                   editState,
@@ -736,8 +837,8 @@ export default function ModuleManager({
                   busy.edit,
                   referenceData,
                   fieldHelpers
-                )
-              )}
+                  )
+                )}
               {editStatus && (
                 <p
                   className={`text-xs ${

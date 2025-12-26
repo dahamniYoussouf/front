@@ -11,6 +11,22 @@ type Promotion = {
   badge_text?: string | null;
 };
 
+type PromotionMenuItem = {
+  id: string;
+  nom?: string | null;
+};
+
+type PromotionOption = {
+  id: string;
+  title?: string | null;
+  badge_text?: string | null;
+  scope?: string | null;
+  type?: string | null;
+  is_active?: boolean;
+  menu_item_id?: string | null;
+  menu_items?: PromotionMenuItem[];
+};
+
 type MenuItem = {
   id: string;
   category_id?: string;
@@ -103,12 +119,65 @@ type MenuItemForm = {
   is_available: boolean;
 };
 
+type PromotionCreateForm = {
+  title: string;
+  type: 'percentage' | 'amount' | 'buy_x_get_y' | 'other';
+  discount_value: string;
+  buy_quantity: string;
+  free_quantity: string;
+  custom_message: string;
+  badge_text: string;
+  currency: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+};
+
 const parseNumber = (value: string) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
 const formatDA = (value: number) => `${new Intl.NumberFormat('fr-FR').format(value)} DA`;
+
+const getPromotionLabel = (promotion: {
+  id: string;
+  title?: string | null;
+  badge_text?: string | null;
+}) => {
+  const title = typeof promotion.title === 'string' ? promotion.title.trim() : '';
+  if (title) return title;
+  const badge = typeof promotion.badge_text === 'string' ? promotion.badge_text.trim() : '';
+  if (badge) return badge;
+  return `Promotion ${promotion.id}`;
+};
+
+const getPromotionMenuItemIds = (promotion: PromotionOption) => {
+  const ids = new Set<string>();
+  if (promotion.menu_item_id) {
+    ids.add(String(promotion.menu_item_id));
+  }
+  if (Array.isArray(promotion.menu_items)) {
+    promotion.menu_items.forEach((item) => {
+      if (item?.id) ids.add(String(item.id));
+    });
+  }
+  return Array.from(ids);
+};
+
+const defaultPromotionCreateForm: PromotionCreateForm = {
+  title: '',
+  type: 'percentage',
+  discount_value: '',
+  buy_quantity: '',
+  free_quantity: '',
+  custom_message: '',
+  badge_text: '',
+  currency: 'DZD',
+  start_date: '',
+  end_date: '',
+  is_active: true
+};
 
 const getApiErrorMessage = (err: unknown, fallback: string) => {
   if (!err || typeof err !== 'object') return fallback;
@@ -169,6 +238,21 @@ export default function RestaurantDetailsPage() {
   const [additionModalError, setAdditionModalError] = useState('');
   const [additionSaving, setAdditionSaving] = useState(false);
 
+  const [promotionOptions, setPromotionOptions] = useState<PromotionOption[]>([]);
+  const [promotionLoading, setPromotionLoading] = useState(false);
+  const [promotionError, setPromotionError] = useState('');
+  const [promotionModalOpen, setPromotionModalOpen] = useState(false);
+  const [promotionModalItem, setPromotionModalItem] = useState<MenuItem | null>(null);
+  const [promotionSelection, setPromotionSelection] = useState('');
+  const [promotionModalError, setPromotionModalError] = useState('');
+  const [promotionSaving, setPromotionSaving] = useState(false);
+  const [promotionCreateOpen, setPromotionCreateOpen] = useState(false);
+  const [promotionCreateForm, setPromotionCreateForm] =
+    useState<PromotionCreateForm>(defaultPromotionCreateForm);
+  const [promotionCreateErrors, setPromotionCreateErrors] = useState<Record<string, string>>({});
+  const [promotionCreateError, setPromotionCreateError] = useState('');
+  const [promotionCreateSaving, setPromotionCreateSaving] = useState(false);
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const showNotification = useCallback(
@@ -187,7 +271,9 @@ export default function RestaurantDetailsPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await apiClient.get(`/restaurant/admin/details/${restaurantId}`);
+      const response = await apiClient.get(`/restaurant/admin/details/${restaurantId}`, {
+        params: { nocache: 'true' }
+      });
       setMenu(response.data?.data as RestaurantMenuPayload);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Erreur lors du chargement du menu'));
@@ -196,9 +282,27 @@ export default function RestaurantDetailsPage() {
     }
   }, [restaurantId]);
 
+  const loadPromotions = useCallback(async () => {
+    if (!restaurantId) return;
+    setPromotionLoading(true);
+    setPromotionError('');
+    try {
+      const response = await apiClient.get('/admin/promotions', {
+        params: { restaurant_id: restaurantId, nocache: 'true' }
+      });
+      const data = response.data?.data;
+      setPromotionOptions(Array.isArray(data) ? data : []);
+    } catch (err: unknown) {
+      setPromotionError(getApiErrorMessage(err, 'Erreur lors du chargement des promotions'));
+    } finally {
+      setPromotionLoading(false);
+    }
+  }, [restaurantId]);
+
   React.useEffect(() => {
     loadMenu();
-  }, [loadMenu]);
+    loadPromotions();
+  }, [loadMenu, loadPromotions]);
 
   const restaurant = menu?.restaurant;
   const categories = useMemo(() => menu?.categories || [], [menu]);
@@ -275,6 +379,49 @@ export default function RestaurantDetailsPage() {
   }, [visibleCategories]);
 
   const hasFilters = menuQuery.trim().length > 0 || availabilityFilter !== 'all';
+
+  const editablePromotions = useMemo(() => {
+    const allowedTypes = new Set(['percentage', 'amount', 'buy_x_get_y', 'other']);
+    return [...promotionOptions]
+      .filter((promotion) => {
+        const scope = String(promotion.scope || '').toLowerCase();
+        const type = String(promotion.type || '').toLowerCase();
+        const hasMenuItems = Array.isArray(promotion.menu_items) && promotion.menu_items.length > 0;
+        const hasAllowedType = !type || allowedTypes.has(type);
+        const canTargetItem =
+          scope === 'menu_item' || scope === 'restaurant' || scope === '' || hasMenuItems;
+
+        return hasAllowedType && canTargetItem && !promotion.menu_item_id;
+      })
+      .sort((a, b) => {
+        const aInactive = a.is_active === false ? 1 : 0;
+        const bInactive = b.is_active === false ? 1 : 0;
+        if (aInactive !== bInactive) return aInactive - bInactive;
+        return getPromotionLabel(a).localeCompare(getPromotionLabel(b), 'fr');
+      });
+  }, [promotionOptions]);
+
+  const lockedPromotion = useMemo(() => {
+    if (!promotionModalItem) return null;
+    return (
+      promotionOptions.find(
+        (promotion) => promotion.menu_item_id && String(promotion.menu_item_id) === promotionModalItem.id
+      ) || null
+    );
+  }, [promotionModalItem, promotionOptions]);
+
+  const currentEditablePromotionId = useMemo(() => {
+    if (!promotionModalItem) return '';
+    const promotion = editablePromotions.find((promo) =>
+      promo.menu_items?.some((item) => String(item.id) === promotionModalItem.id)
+    );
+    return promotion?.id || '';
+  }, [promotionModalItem, editablePromotions]);
+
+  React.useEffect(() => {
+    if (!promotionModalOpen || !promotionModalItem) return;
+    setPromotionSelection((prev) => (prev ? prev : currentEditablePromotionId));
+  }, [promotionModalOpen, promotionModalItem, currentEditablePromotionId]);
 
   const closeModal = () => {
     setModal('');
@@ -487,6 +634,198 @@ export default function RestaurantDetailsPage() {
       setError(getApiErrorMessage(err, "Erreur lors du changement d'etat"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openPromotionModal = (item: MenuItem) => {
+    setPromotionModalItem(item);
+    setPromotionSelection('');
+    setPromotionModalError('');
+    setPromotionCreateOpen(false);
+    setPromotionCreateForm(defaultPromotionCreateForm);
+    setPromotionCreateErrors({});
+    setPromotionCreateError('');
+    setPromotionModalOpen(true);
+  };
+
+  const closePromotionModal = () => {
+    setPromotionModalOpen(false);
+    setPromotionModalItem(null);
+    setPromotionSelection('');
+    setPromotionModalError('');
+    setPromotionCreateOpen(false);
+    setPromotionCreateForm(defaultPromotionCreateForm);
+    setPromotionCreateErrors({});
+    setPromotionCreateError('');
+  };
+
+  const updatePromotionMenuItems = async (promotion: PromotionOption, menuItemIds: string[]) => {
+    await apiClient.put(`/admin/promotions/${promotion.id}`, {
+      menu_item_ids: menuItemIds
+    });
+  };
+
+  const handlePromotionSave = async () => {
+    if (!promotionModalItem) return;
+    if (lockedPromotion) {
+      setPromotionModalError(
+        'Cette promotion est liee via menu_item_id. Merci de la modifier depuis la page promotions.'
+      );
+      return;
+    }
+
+    if (promotionSelection === currentEditablePromotionId) {
+      closePromotionModal();
+      return;
+    }
+
+    setPromotionSaving(true);
+    setPromotionModalError('');
+    try {
+      const currentPromotion = editablePromotions.find(
+        (promo) => promo.id === currentEditablePromotionId
+      );
+
+      if (currentPromotion) {
+        const nextIds = getPromotionMenuItemIds(currentPromotion).filter(
+          (id) => id !== promotionModalItem.id
+        );
+        await updatePromotionMenuItems(currentPromotion, nextIds);
+      }
+
+      if (promotionSelection) {
+        const nextPromotion = editablePromotions.find((promo) => promo.id === promotionSelection);
+        if (!nextPromotion) {
+          throw new Error('Promotion introuvable');
+        }
+        const nextIds = getPromotionMenuItemIds(nextPromotion);
+        if (!nextIds.includes(promotionModalItem.id)) {
+          nextIds.push(promotionModalItem.id);
+        }
+        await updatePromotionMenuItems(nextPromotion, nextIds);
+      }
+
+      showNotification('Promotions mises a jour');
+      closePromotionModal();
+      await loadMenu();
+      await loadPromotions();
+    } catch (err: unknown) {
+      setPromotionModalError(getApiErrorMessage(err, 'Erreur lors de la mise a jour des promotions'));
+    } finally {
+      setPromotionSaving(false);
+    }
+  };
+
+  const handlePromotionCreate = async () => {
+    if (!promotionModalItem) return;
+    const errors: Record<string, string> = {};
+    const title = promotionCreateForm.title.trim();
+    const type = promotionCreateForm.type;
+
+    if (!title) {
+      errors.title = 'Le titre est obligatoire';
+    }
+
+    if (type === 'percentage' || type === 'amount') {
+      const discountValue = parseNumber(promotionCreateForm.discount_value);
+      if (discountValue === undefined || discountValue <= 0) {
+        errors.discount_value = 'Valeur de reduction invalide';
+      }
+    }
+
+    if (type === 'buy_x_get_y') {
+      const buyValue = Number.parseInt(promotionCreateForm.buy_quantity, 10);
+      const freeValue = Number.parseInt(promotionCreateForm.free_quantity, 10);
+      if (!Number.isFinite(buyValue) || buyValue < 1) {
+        errors.buy_quantity = 'Quantite a acheter invalide';
+      }
+      if (!Number.isFinite(freeValue) || freeValue < 1) {
+        errors.free_quantity = 'Quantite offerte invalide';
+      }
+    }
+
+    if (type === 'other' && !promotionCreateForm.custom_message.trim()) {
+      errors.custom_message = 'Le message est obligatoire pour ce type';
+    }
+
+    if (promotionCreateForm.start_date && promotionCreateForm.end_date) {
+      const start = new Date(promotionCreateForm.start_date);
+      const end = new Date(promotionCreateForm.end_date);
+      if (!(end > start)) {
+        errors.end_date = 'La date de fin doit etre apres la date de debut';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPromotionCreateErrors(errors);
+      return;
+    }
+
+    setPromotionCreateSaving(true);
+    setPromotionCreateError('');
+    setPromotionCreateErrors({});
+    try {
+      const payload: Record<string, unknown> = {
+        title,
+        type,
+        scope: 'menu_item',
+        restaurant_id: restaurantId,
+        is_active: promotionCreateForm.is_active
+      };
+
+      const badgeText = promotionCreateForm.badge_text.trim();
+      if (badgeText) {
+        payload.badge_text = badgeText;
+      }
+
+      const startDate = promotionCreateForm.start_date.trim();
+      if (startDate) {
+        payload.start_date = startDate;
+      }
+
+      const endDate = promotionCreateForm.end_date.trim();
+      if (endDate) {
+        payload.end_date = endDate;
+      }
+
+      const customMessage = promotionCreateForm.custom_message.trim();
+      if (customMessage) {
+        payload.custom_message = customMessage;
+      }
+
+      if (type === 'percentage' || type === 'amount') {
+        payload.discount_value = parseNumber(promotionCreateForm.discount_value);
+        if (type === 'amount' && promotionCreateForm.currency.trim()) {
+          payload.currency = promotionCreateForm.currency.trim();
+        }
+      }
+
+      if (type === 'buy_x_get_y') {
+        payload.menu_item_id = promotionModalItem.id;
+        payload.buy_quantity = Number.parseInt(promotionCreateForm.buy_quantity, 10);
+        payload.free_quantity = Number.parseInt(promotionCreateForm.free_quantity, 10);
+      } else {
+        payload.menu_item_ids = [promotionModalItem.id];
+      }
+
+      const response = await apiClient.post('/admin/promotions', payload);
+      const created = response.data?.data as PromotionOption | undefined;
+
+      showNotification('Promotion creee');
+      setPromotionCreateOpen(false);
+      setPromotionCreateForm(defaultPromotionCreateForm);
+      await loadMenu();
+      await loadPromotions();
+
+      if (created?.menu_item_id) {
+        setPromotionSelection('');
+      } else if (created?.id) {
+        setPromotionSelection(String(created.id));
+      }
+    } catch (err: unknown) {
+      setPromotionCreateError(getApiErrorMessage(err, 'Erreur lors de la creation de la promotion'));
+    } finally {
+      setPromotionCreateSaving(false);
     }
   };
 
@@ -756,6 +1095,373 @@ export default function RestaurantDetailsPage() {
           </div>
         </div>
       )}
+
+      {promotionModalOpen && promotionModalItem ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-slate-800">
+              <div className="font-semibold text-gray-900 dark:text-slate-100">Promotions du plat</div>
+              <button
+                type="button"
+                onClick={closePromotionModal}
+                className="rounded-lg p-2 hover:bg-gray-50 dark:hover:bg-slate-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {promotionModalError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  {promotionModalError}
+                </div>
+              ) : null}
+
+              {promotionError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  {promotionError}
+                </div>
+              ) : null}
+
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200">
+                Plat: <span className="font-medium">{promotionModalItem.nom}</span>
+              </div>
+
+              {lockedPromotion ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+                  Promotion liee via menu_item_id: {getPromotionLabel(lockedPromotion)}
+                </div>
+              ) : null}
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Promotion associee
+                </label>
+                <select
+                  value={promotionSelection}
+                  onChange={(e) => setPromotionSelection(e.target.value)}
+                  disabled={
+                    promotionLoading ||
+                    promotionSaving ||
+                    promotionCreateSaving ||
+                    Boolean(lockedPromotion) ||
+                    editablePromotions.length === 0
+                  }
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                >
+                  <option value="">Aucune promotion</option>
+                  {editablePromotions.map((promo) => (
+                    <option key={promo.id} value={promo.id}>
+                      {getPromotionLabel(promo)}
+                      {promo.is_active === false ? ' (inactive)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {promotionLoading ? (
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                    Chargement des promotions...
+                  </p>
+                ) : null}
+                {!promotionLoading && editablePromotions.length === 0 ? (
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                    Aucune promotion modifiable pour ce restaurant.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="rounded-lg border border-gray-200 bg-white/80 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                    Nouvelle promotion
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPromotionCreateOpen((prev) => !prev)}
+                    className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                    disabled={promotionCreateSaving}
+                  >
+                    {promotionCreateOpen ? 'Masquer' : 'Ajouter'}
+                  </button>
+                </div>
+
+                {promotionCreateOpen ? (
+                  <div className="mt-3 space-y-3">
+                    {promotionCreateError ? (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+                        {promotionCreateError}
+                      </div>
+                    ) : null}
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                          Titre
+                        </label>
+                        <input
+                          value={promotionCreateForm.title}
+                          onChange={(e) =>
+                            setPromotionCreateForm((prev) => ({ ...prev, title: e.target.value }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          placeholder="Ex: -20% sur le tacos"
+                        />
+                        {promotionCreateErrors.title ? (
+                          <p className="mt-1 text-xs text-red-500">{promotionCreateErrors.title}</p>
+                        ) : null}
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                          Type
+                        </label>
+                        <select
+                          value={promotionCreateForm.type}
+                          onChange={(e) =>
+                            setPromotionCreateForm((prev) => ({
+                              ...prev,
+                              type: e.target.value as PromotionCreateForm['type']
+                            }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        >
+                          <option value="percentage">Pourcentage</option>
+                          <option value="amount">Montant</option>
+                          <option value="buy_x_get_y">Acheter X, obtenir Y</option>
+                          <option value="other">Autre</option>
+                        </select>
+                      </div>
+
+                      {promotionCreateForm.type === 'amount' ? (
+                        <div>
+                          <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                            Devise
+                          </label>
+                          <input
+                            value={promotionCreateForm.currency}
+                            onChange={(e) =>
+                              setPromotionCreateForm((prev) => ({ ...prev, currency: e.target.value }))
+                            }
+                            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                            placeholder="DZD"
+                          />
+                        </div>
+                      ) : null}
+
+                      {(promotionCreateForm.type === 'percentage' ||
+                        promotionCreateForm.type === 'amount') && (
+                        <div>
+                          <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                            Valeur reduction
+                          </label>
+                          <input
+                            value={promotionCreateForm.discount_value}
+                            onChange={(e) =>
+                              setPromotionCreateForm((prev) => ({
+                                ...prev,
+                                discount_value: e.target.value
+                              }))
+                            }
+                            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                            placeholder={promotionCreateForm.type === 'percentage' ? '20' : '300'}
+                            inputMode="decimal"
+                          />
+                          {promotionCreateErrors.discount_value ? (
+                            <p className="mt-1 text-xs text-red-500">
+                              {promotionCreateErrors.discount_value}
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+
+                      {promotionCreateForm.type === 'buy_x_get_y' ? (
+                        <>
+                          <div>
+                            <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                              Quantite a acheter
+                            </label>
+                            <input
+                              value={promotionCreateForm.buy_quantity}
+                              onChange={(e) =>
+                                setPromotionCreateForm((prev) => ({
+                                  ...prev,
+                                  buy_quantity: e.target.value
+                                }))
+                              }
+                              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                              placeholder="2"
+                              inputMode="numeric"
+                            />
+                            {promotionCreateErrors.buy_quantity ? (
+                              <p className="mt-1 text-xs text-red-500">
+                                {promotionCreateErrors.buy_quantity}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                              Quantite offerte
+                            </label>
+                            <input
+                              value={promotionCreateForm.free_quantity}
+                              onChange={(e) =>
+                                setPromotionCreateForm((prev) => ({
+                                  ...prev,
+                                  free_quantity: e.target.value
+                                }))
+                              }
+                              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                              placeholder="1"
+                              inputMode="numeric"
+                            />
+                            {promotionCreateErrors.free_quantity ? (
+                              <p className="mt-1 text-xs text-red-500">
+                                {promotionCreateErrors.free_quantity}
+                              </p>
+                            ) : null}
+                          </div>
+                        </>
+                      ) : null}
+
+                      {(promotionCreateForm.type === 'other' ||
+                        promotionCreateForm.type === 'buy_x_get_y') && (
+                        <div className="sm:col-span-2">
+                          <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                            Message
+                          </label>
+                          <textarea
+                            value={promotionCreateForm.custom_message}
+                            onChange={(e) =>
+                              setPromotionCreateForm((prev) => ({
+                                ...prev,
+                                custom_message: e.target.value
+                              }))
+                            }
+                            rows={3}
+                            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                            placeholder="Ex: 2 achetes, 1 offert"
+                          />
+                          {promotionCreateErrors.custom_message ? (
+                            <p className="mt-1 text-xs text-red-500">
+                              {promotionCreateErrors.custom_message}
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+
+                      <div className="sm:col-span-2">
+                        <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                          Badge (optionnel)
+                        </label>
+                        <input
+                          value={promotionCreateForm.badge_text}
+                          onChange={(e) =>
+                            setPromotionCreateForm((prev) => ({
+                              ...prev,
+                              badge_text: e.target.value
+                            }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          placeholder="Ex: -20%"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                          Debut
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={promotionCreateForm.start_date}
+                          onChange={(e) =>
+                            setPromotionCreateForm((prev) => ({
+                              ...prev,
+                              start_date: e.target.value
+                            }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                          Fin
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={promotionCreateForm.end_date}
+                          onChange={(e) =>
+                            setPromotionCreateForm((prev) => ({
+                              ...prev,
+                              end_date: e.target.value
+                            }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        />
+                        {promotionCreateErrors.end_date ? (
+                          <p className="mt-1 text-xs text-red-500">
+                            {promotionCreateErrors.end_date}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={promotionCreateForm.is_active}
+                        onChange={(e) =>
+                          setPromotionCreateForm((prev) => ({
+                            ...prev,
+                            is_active: e.target.checked
+                          }))
+                        }
+                        className="h-4 w-4 text-amber-600 rounded focus:ring-2 focus:ring-amber-500"
+                      />
+                      Promotion active
+                    </label>
+
+                    <div className="flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={handlePromotionCreate}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                        disabled={promotionCreateSaving}
+                      >
+                        <Plus className="h-4 w-4" />
+                        {promotionCreateSaving ? 'Creation...' : 'Creer et lier'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 px-4 py-3 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={closePromotionModal}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                disabled={promotionSaving || promotionCreateSaving}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handlePromotionSave}
+                className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                disabled={
+                  promotionSaving ||
+                  promotionLoading ||
+                  promotionCreateSaving ||
+                  Boolean(lockedPromotion) ||
+                  promotionSelection === currentEditablePromotionId
+                }
+              >
+                {promotionSaving ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 dark:bg-slate-900 dark:border-slate-700">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1068,6 +1774,14 @@ export default function RestaurantDetailsPage() {
                                 disabled={saving}
                               >
                                 Ajouter addition
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openPromotionModal(item)}
+                                className="rounded-lg border border-amber-200 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-60 dark:border-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/20"
+                                disabled={saving}
+                              >
+                                Promotions
                               </button>
                               <button
                                 type="button"

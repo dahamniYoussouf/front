@@ -146,6 +146,8 @@ export default function AdminNotificationsToolbar() {
       const data = await response.json().catch(() => null);
       const list = (data?.data || []) as AdminNotification[];
       setNotifications(list);
+    } catch (error) {
+      console.warn('Failed to fetch admin notifications:', error);
     } finally {
       setLoading(false);
     }
@@ -155,16 +157,20 @@ export default function AdminNotificationsToolbar() {
     const token = localStorage.getItem('access_token') || localStorage.getItem('token');
     if (!token) return;
 
-    const response = await fetch(`${API_URL}/admin/notifications/${notificationId}/read`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    try {
+      const response = await fetch(`${API_URL}/admin/notifications/${notificationId}/read`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    if (!response.ok) return;
-    setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n)));
+      if (!response.ok) return;
+      setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n)));
+    } catch (error) {
+      console.warn('Failed to mark admin notification as read:', error);
+    }
   };
 
   useEffect(() => {

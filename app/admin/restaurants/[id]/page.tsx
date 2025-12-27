@@ -401,27 +401,65 @@ export default function RestaurantDetailsPage() {
       });
   }, [promotionOptions]);
 
+  const currentItemPromotion = useMemo(() => {
+    if (!promotionModalItem?.promotions?.length) return null;
+    const primary = promotionModalItem.promotions[0];
+    if (!primary?.id) return null;
+    const primaryId = String(primary.id);
+    const full = promotionOptions.find((promotion) => String(promotion.id) === primaryId);
+    if (full) return full;
+    return {
+      id: primaryId,
+      title: primary.title ?? null,
+      badge_text: primary.badge_text ?? null
+    } as PromotionOption;
+  }, [promotionModalItem, promotionOptions]);
+
   const lockedPromotion = useMemo(() => {
     if (!promotionModalItem) return null;
-    return (
+    const directMatch =
       promotionOptions.find(
         (promotion) => promotion.menu_item_id && String(promotion.menu_item_id) === promotionModalItem.id
-      ) || null
-    );
-  }, [promotionModalItem, promotionOptions]);
+      ) || null;
+    if (directMatch) return directMatch;
+    if (currentItemPromotion && !editablePromotions.some((promo) => promo.id === currentItemPromotion.id)) {
+      return currentItemPromotion;
+    }
+    return null;
+  }, [promotionModalItem, promotionOptions, currentItemPromotion, editablePromotions]);
 
   const currentEditablePromotionId = useMemo(() => {
     if (!promotionModalItem) return '';
     const promotion = editablePromotions.find((promo) =>
       promo.menu_items?.some((item) => String(item.id) === promotionModalItem.id)
     );
-    return promotion?.id || '';
-  }, [promotionModalItem, editablePromotions]);
+    if (promotion?.id) return promotion.id;
+    if (currentItemPromotion && editablePromotions.some((promo) => promo.id === currentItemPromotion.id)) {
+      return currentItemPromotion.id;
+    }
+    return '';
+  }, [promotionModalItem, editablePromotions, currentItemPromotion]);
+
+  const currentPromotionId = useMemo(
+    () => (lockedPromotion?.id ? lockedPromotion.id : currentEditablePromotionId),
+    [lockedPromotion, currentEditablePromotionId]
+  );
+
+  const promotionSelectOptions = useMemo(() => {
+    const options = [...editablePromotions];
+    const extraPromotion = lockedPromotion || currentItemPromotion;
+    if (extraPromotion && !options.some((promo) => promo.id === extraPromotion.id)) {
+      options.unshift(extraPromotion);
+    }
+    return options;
+  }, [editablePromotions, lockedPromotion, currentItemPromotion]);
 
   React.useEffect(() => {
     if (!promotionModalOpen || !promotionModalItem) return;
-    setPromotionSelection((prev) => (prev ? prev : currentEditablePromotionId));
-  }, [promotionModalOpen, promotionModalItem, currentEditablePromotionId]);
+    setPromotionSelection(
+      (prev) => (prev ? prev : currentPromotionId || currentItemPromotion?.id || '')
+    );
+  }, [promotionModalOpen, promotionModalItem, currentPromotionId, currentItemPromotion]);
 
   const closeModal = () => {
     setModal('');
@@ -659,22 +697,24 @@ export default function RestaurantDetailsPage() {
     setPromotionCreateError('');
   };
 
-  const updatePromotionMenuItems = async (promotion: PromotionOption, menuItemIds: string[]) => {
-    await apiClient.put(`/admin/promotions/${promotion.id}`, {
+  const updatePromotionMenuItems = async (
+    promotion: PromotionOption,
+    menuItemIds: string[],
+    directMenuItemId?: string | null
+  ) => {
+    const payload: Record<string, unknown> = {
       menu_item_ids: menuItemIds
-    });
+    };
+    if (directMenuItemId !== undefined) {
+      payload.menu_item_id = directMenuItemId;
+    }
+    await apiClient.put(`/admin/promotions/${promotion.id}`, payload);
   };
 
   const handlePromotionSave = async () => {
     if (!promotionModalItem) return;
-    if (lockedPromotion) {
-      setPromotionModalError(
-        'Cette promotion est liee via menu_item_id. Merci de la modifier depuis la page promotions.'
-      );
-      return;
-    }
-
-    if (promotionSelection === currentEditablePromotionId) {
+    const currentPromotionId = lockedPromotion?.id || currentEditablePromotionId;
+    if ((promotionSelection || '') === (currentPromotionId || '')) {
       closePromotionModal();
       return;
     }
@@ -682,19 +722,26 @@ export default function RestaurantDetailsPage() {
     setPromotionSaving(true);
     setPromotionModalError('');
     try {
-      const currentPromotion = editablePromotions.find(
-        (promo) => promo.id === currentEditablePromotionId
-      );
+      const currentPromotion = currentPromotionId
+        ? promotionOptions.find((promo) => promo.id === currentPromotionId) || lockedPromotion
+        : null;
 
       if (currentPromotion) {
         const nextIds = getPromotionMenuItemIds(currentPromotion).filter(
           (id) => id !== promotionModalItem.id
         );
-        await updatePromotionMenuItems(currentPromotion, nextIds);
+        const shouldClearDirect = Boolean(currentPromotion.menu_item_id);
+        await updatePromotionMenuItems(
+          currentPromotion,
+          nextIds,
+          shouldClearDirect ? null : undefined
+        );
       }
 
       if (promotionSelection) {
-        const nextPromotion = editablePromotions.find((promo) => promo.id === promotionSelection);
+        const nextPromotion =
+          promotionOptions.find((promo) => promo.id === promotionSelection) ||
+          editablePromotions.find((promo) => promo.id === promotionSelection);
         if (!nextPromotion) {
           throw new Error('Promotion introuvable');
         }
@@ -1129,7 +1176,11 @@ export default function RestaurantDetailsPage() {
 
               {lockedPromotion ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
-                  Promotion liee via menu_item_id: {getPromotionLabel(lockedPromotion)}
+                  {lockedPromotion.menu_item_id ? 'Promotion liee via menu_item_id' : 'Promotion actuelle'}
+                  {`: ${getPromotionLabel(lockedPromotion)}`}
+                  <div className="mt-1 text-[11px] text-amber-700 dark:text-amber-200">
+                    Choisissez "Aucune promotion" pour la detacher ou liez une autre promotion.
+                  </div>
                 </div>
               ) : null}
 
@@ -1144,16 +1195,16 @@ export default function RestaurantDetailsPage() {
                     promotionLoading ||
                     promotionSaving ||
                     promotionCreateSaving ||
-                    Boolean(lockedPromotion) ||
-                    editablePromotions.length === 0
+                    promotionSelectOptions.length === 0
                   }
                   className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 >
                   <option value="">Aucune promotion</option>
-                  {editablePromotions.map((promo) => (
+                  {promotionSelectOptions.map((promo) => (
                     <option key={promo.id} value={promo.id}>
                       {getPromotionLabel(promo)}
                       {promo.is_active === false ? ' (inactive)' : ''}
+                      {lockedPromotion && promo.id === lockedPromotion.id ? ' (verrouillee)' : ''}
                     </option>
                   ))}
                 </select>
@@ -1162,7 +1213,7 @@ export default function RestaurantDetailsPage() {
                     Chargement des promotions...
                   </p>
                 ) : null}
-                {!promotionLoading && editablePromotions.length === 0 ? (
+                {!promotionLoading && editablePromotions.length === 0 && !lockedPromotion ? (
                   <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                     Aucune promotion modifiable pour ce restaurant.
                   </p>
@@ -1452,8 +1503,7 @@ export default function RestaurantDetailsPage() {
                   promotionSaving ||
                   promotionLoading ||
                   promotionCreateSaving ||
-                  Boolean(lockedPromotion) ||
-                  promotionSelection === currentEditablePromotionId
+                  promotionSelection === currentPromotionId
                 }
               >
                 {promotionSaving ? 'Enregistrement...' : 'Enregistrer'}

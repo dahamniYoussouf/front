@@ -165,6 +165,34 @@ const getPromotionMenuItemIds = (promotion: PromotionOption) => {
   return Array.from(ids);
 };
 
+const normalizePromotionScope = (scope?: string | null) => String(scope || '').trim().toLowerCase();
+
+const isMenuItemScopedPromotion = (promotion: PromotionOption) => {
+  const scope = normalizePromotionScope(promotion.scope);
+  const hasMenuItems = Array.isArray(promotion.menu_items) && promotion.menu_items.length > 0;
+  if (scope === 'menu_item') return true;
+  if (!scope && (hasMenuItems || promotion.menu_item_id)) return true;
+  return false;
+};
+
+const isPromotionLinkedToItem = (promotion: PromotionOption, menuItemId: string) => {
+  if (promotion.menu_item_id && String(promotion.menu_item_id) === menuItemId) {
+    return true;
+  }
+  if (Array.isArray(promotion.menu_items)) {
+    return promotion.menu_items.some((item) => String(item.id) === menuItemId);
+  }
+  return false;
+};
+
+const findLinkedPromotion = (promotions: PromotionOption[], menuItemId: string) => {
+  const direct = promotions.find(
+    (promotion) => promotion.menu_item_id && String(promotion.menu_item_id) === menuItemId
+  );
+  if (direct) return direct;
+  return promotions.find((promotion) => isPromotionLinkedToItem(promotion, menuItemId)) || null;
+};
+
 const defaultPromotionCreateForm: PromotionCreateForm = {
   title: '',
   type: 'percentage',
@@ -384,13 +412,9 @@ export default function RestaurantDetailsPage() {
     const allowedTypes = new Set(['percentage', 'amount', 'buy_x_get_y', 'other']);
     return [...promotionOptions]
       .filter((promotion) => {
-        const scope = String(promotion.scope || '').toLowerCase();
         const type = String(promotion.type || '').toLowerCase();
-        const hasMenuItems = Array.isArray(promotion.menu_items) && promotion.menu_items.length > 0;
         const hasAllowedType = !type || allowedTypes.has(type);
-        const canTargetItem =
-          scope === 'menu_item' || scope === 'restaurant' || scope === '' || hasMenuItems;
-
+        const canTargetItem = isMenuItemScopedPromotion(promotion);
         return hasAllowedType && canTargetItem && !promotion.menu_item_id;
       })
       .sort((a, b) => {
@@ -401,44 +425,26 @@ export default function RestaurantDetailsPage() {
       });
   }, [promotionOptions]);
 
-  const currentItemPromotion = useMemo(() => {
-    if (!promotionModalItem?.promotions?.length) return null;
-    const primary = promotionModalItem.promotions[0];
-    if (!primary?.id) return null;
-    const primaryId = String(primary.id);
-    const full = promotionOptions.find((promotion) => String(promotion.id) === primaryId);
-    if (full) return full;
-    return {
-      id: primaryId,
-      title: primary.title ?? null,
-      badge_text: primary.badge_text ?? null
-    } as PromotionOption;
+  const linkedPromotion = useMemo(() => {
+    if (!promotionModalItem) return null;
+    return findLinkedPromotion(promotionOptions, String(promotionModalItem.id));
   }, [promotionModalItem, promotionOptions]);
 
   const lockedPromotion = useMemo(() => {
-    if (!promotionModalItem) return null;
-    const directMatch =
-      promotionOptions.find(
-        (promotion) => promotion.menu_item_id && String(promotion.menu_item_id) === promotionModalItem.id
-      ) || null;
-    if (directMatch) return directMatch;
-    if (currentItemPromotion && !editablePromotions.some((promo) => promo.id === currentItemPromotion.id)) {
-      return currentItemPromotion;
+    if (!linkedPromotion) return null;
+    if (linkedPromotion.menu_item_id) return linkedPromotion;
+    if (!editablePromotions.some((promo) => promo.id === linkedPromotion.id)) {
+      return linkedPromotion;
     }
     return null;
-  }, [promotionModalItem, promotionOptions, currentItemPromotion, editablePromotions]);
+  }, [linkedPromotion, editablePromotions]);
 
   const currentEditablePromotionId = useMemo(() => {
-    if (!promotionModalItem) return '';
-    const promotion = editablePromotions.find((promo) =>
-      promo.menu_items?.some((item) => String(item.id) === promotionModalItem.id)
-    );
-    if (promotion?.id) return promotion.id;
-    if (currentItemPromotion && editablePromotions.some((promo) => promo.id === currentItemPromotion.id)) {
-      return currentItemPromotion.id;
+    if (linkedPromotion && editablePromotions.some((promo) => promo.id === linkedPromotion.id)) {
+      return linkedPromotion.id;
     }
     return '';
-  }, [promotionModalItem, editablePromotions, currentItemPromotion]);
+  }, [linkedPromotion, editablePromotions]);
 
   const currentPromotionId = useMemo(
     () => (lockedPromotion?.id ? lockedPromotion.id : currentEditablePromotionId),
@@ -447,19 +453,16 @@ export default function RestaurantDetailsPage() {
 
   const promotionSelectOptions = useMemo(() => {
     const options = [...editablePromotions];
-    const extraPromotion = lockedPromotion || currentItemPromotion;
-    if (extraPromotion && !options.some((promo) => promo.id === extraPromotion.id)) {
-      options.unshift(extraPromotion);
+    if (lockedPromotion && !options.some((promo) => promo.id === lockedPromotion.id)) {
+      options.unshift(lockedPromotion);
     }
     return options;
-  }, [editablePromotions, lockedPromotion, currentItemPromotion]);
+  }, [editablePromotions, lockedPromotion]);
 
   React.useEffect(() => {
     if (!promotionModalOpen || !promotionModalItem) return;
-    setPromotionSelection(
-      (prev) => (prev ? prev : currentPromotionId || currentItemPromotion?.id || '')
-    );
-  }, [promotionModalOpen, promotionModalItem, currentPromotionId, currentItemPromotion]);
+    setPromotionSelection((prev) => (prev ? prev : currentPromotionId || ''));
+  }, [promotionModalOpen, promotionModalItem, currentPromotionId]);
 
   const closeModal = () => {
     setModal('');

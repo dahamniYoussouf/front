@@ -40,7 +40,7 @@ export type AsyncOptionsConfig = {
 export type ModuleFormField = {
   name: string;
   label: string;
-  type: 'text' | 'textarea' | 'number' | 'url' | 'select' | 'checkbox' | 'date';
+  type: 'text' | 'textarea' | 'number' | 'url' | 'image' | 'select' | 'checkbox' | 'date';
   placeholder?: string;
   hint?: string;
   required?: boolean;

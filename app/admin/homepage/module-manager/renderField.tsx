@@ -1,3 +1,5 @@
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
+
 import type {
   ModuleDescriptor,
   ModuleFieldOption,
@@ -7,12 +9,194 @@ import type {
 } from './types';
 import { resolveOptions } from './helpers';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 export type FieldRenderHelpers = {
   selectFilters?: Record<string, string>;
   asyncOptionsCache?: Record<string, ModuleFieldOption[]>;
   asyncLoading?: Record<string, boolean>;
   handleFilterChange?: (key: string, value: string) => void;
   fieldErrors?: Record<string, string>;
+};
+
+type ImageUploadFieldProps = {
+  fieldId: string;
+  label: string;
+  value: unknown;
+  required?: boolean;
+  disabled?: boolean;
+  hint?: string;
+  error?: string;
+  onChange: (value: string) => void;
+};
+
+const normalizeStringValue = (value: unknown) => {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value === undefined || value === null) {
+    return '';
+  }
+  return String(value);
+};
+
+const ImageUploadField = ({
+  fieldId,
+  label,
+  value,
+  required,
+  disabled,
+  hint,
+  error,
+  onChange
+}: ImageUploadFieldProps) => {
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const lastUploadedUrl = useRef<string | null>(null);
+  const normalizedValue = normalizeStringValue(value);
+  const visibleUrl = previewUrl || normalizedValue;
+  const fileInputId = `${fieldId}-file`;
+
+  useEffect(() => {
+    if (normalizedValue && lastUploadedUrl.current === normalizedValue) {
+      return;
+    }
+    if (!normalizedValue && lastUploadedUrl.current === null) {
+      return;
+    }
+    setPreviewUrl(null);
+    lastUploadedUrl.current = null;
+  }, [normalizedValue]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handleRemove = () => {
+    setLocalError(null);
+    setPreviewUrl(null);
+    lastUploadedUrl.current = null;
+    onChange('');
+  };
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || disabled) {
+      event.target.value = '';
+      return;
+    }
+
+    setLocalError(null);
+
+    if (!file.type.startsWith('image/')) {
+      setLocalError('Veuillez selectionner une image valide.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      setLocalError("L'image ne doit pas depasser 5 MB.");
+      event.target.value = '';
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_URL}/api/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error("Echec de l'upload de l'image.");
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      const url = typeof payload?.url === 'string' ? payload.url : '';
+      if (!url) {
+        throw new Error("URL de l'image manquante.");
+      }
+
+      lastUploadedUrl.current = url;
+      onChange(url);
+      setPreviewUrl(URL.createObjectURL(file));
+    } catch (uploadError) {
+      setLocalError(uploadError instanceof Error ? uploadError.message : "Erreur lors de l'upload.");
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-semibold text-slate-600 dark:text-slate-300" htmlFor={fileInputId}>
+        {label}
+      </label>
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
+        {visibleUrl ? (
+          <div className="flex items-center gap-3">
+            <img
+              src={visibleUrl}
+              alt={`${label} preview`}
+              className="h-16 w-16 rounded-xl object-cover"
+            />
+            <div className="flex-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {previewUrl ? 'Image previsualisee' : 'Image actuelle'}
+              </p>
+              {normalizedValue && !previewUrl ? (
+                <p className="break-all text-[0.65rem] text-slate-400 dark:text-slate-500">{normalizedValue}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="text-xs font-semibold text-rose-500 transition hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={disabled || uploading}
+            >
+              Supprimer
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 dark:text-slate-400">Aucune image selectionnee.</p>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label
+            className={`inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 ${
+              disabled || uploading
+                ? 'cursor-not-allowed opacity-60'
+                : 'cursor-pointer hover:border-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            htmlFor={fileInputId}
+          >
+            {uploading ? 'Upload en cours...' : 'Telecharger une image'}
+          </label>
+          <input
+            id={fileInputId}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            disabled={disabled || uploading}
+            required={Boolean(required && !normalizedValue)}
+            className="sr-only"
+          />
+          <span className="text-[0.65rem] text-slate-400 dark:text-slate-500">Formats image, max 5 MB</span>
+        </div>
+      </div>
+      {hint && <p className="text-xs text-slate-400 dark:text-slate-500">{hint}</p>}
+      {localError && <p className="text-xs font-medium text-rose-500 dark:text-rose-400">{localError}</p>}
+      {error && <p className="text-xs font-medium text-rose-500 dark:text-rose-400">{error}</p>}
+    </div>
+  );
 };
 
 export const renderField = (
@@ -69,6 +253,20 @@ export const renderField = (
           {field.hint && <p className="text-xs text-slate-400 dark:text-slate-500">{field.hint}</p>}
           {renderFieldError()}
         </div>
+      );
+    case 'image':
+      return (
+        <ImageUploadField
+          key={fieldId}
+          fieldId={fieldId}
+          label={field.label}
+          value={value}
+          required={field.required}
+          disabled={disabled}
+          hint={field.hint}
+          error={fieldError}
+          onChange={(nextValue) => applyChange(nextValue)}
+        />
       );
     case 'select': {
       const baseOptions = resolveOptions(field, references, optionContext);

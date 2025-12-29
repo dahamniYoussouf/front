@@ -152,7 +152,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
     fields: [
       { name: 'name', label: 'Nom', type: 'text', required: true, placeholder: 'Burgers' },
       { name: 'description', label: 'Description', type: 'textarea', placeholder: 'Accroche courte' },
-      { name: 'image_url', label: 'Image URL', type: 'url', placeholder: 'https://...' },
+      { name: 'image_url', label: 'Image', type: 'image' },
       { name: 'display_order', label: "Ordre d'affichage", type: 'number', placeholder: '1' },
       { name: 'is_active', label: 'Actif', type: 'checkbox', default: true }
     ],
@@ -184,7 +184,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
               label: String(category.name ?? category.title ?? 'Catégorie')
             }))
       },
-      { name: 'image_url', label: 'Image URL', type: 'url' },
+      { name: 'image_url', label: 'Image', type: 'image' },
       { name: 'is_active', label: 'Actif', type: 'checkbox', default: true }
     ],
     itemSubtitle: (item, refs) => {
@@ -397,8 +397,9 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
     updateEndpoint: (item) => `/announcement/update/${item.id}`,
     deleteEndpoint: (item) => `/announcement/delete/${item.id}`,
     fields: [
-      { name: 'title', label: 'Titre', type: 'text', required: true },
-      { name: 'content', label: 'Contenu', type: 'textarea', required: true },
+      { name: 'title', label: 'Titre', type: 'text' },
+      { name: 'content', label: 'Contenu', type: 'textarea' },
+      { name: 'image_url', label: 'Image', type: 'image' },
       {
         name: 'type',
         label: 'Ton',

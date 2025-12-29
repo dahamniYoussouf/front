@@ -30,8 +30,9 @@ type AnnouncementType = 'info' | 'success' | 'warning' | 'error';
 
 interface Announcement {
   id: string;
-  title: string;
-  content: string;
+  title?: string | null;
+  content?: string | null;
+  image_url?: string | null;
   css_styles?: string;
   js_scripts?: string;
   type: AnnouncementType;
@@ -1627,6 +1628,7 @@ export default function AnnouncementManagement() {
   const [formData, setFormData] = useState<Partial<Announcement>>({
     title: '',
     content: '',
+    image_url: '',
     css_styles: '',
     js_scripts: '',
     type: 'info',
@@ -1739,9 +1741,10 @@ export default function AnnouncementManagement() {
 
   // Filter announcements
   const filteredAnnouncements = announcements.filter((announcement) => {
-    const search = searchTerm.toLowerCase();
+    const search = searchTerm.trim().toLowerCase();
 
     const matchesSearch =
+      !search ||
       announcement.title?.toLowerCase().includes(search) ||
       announcement.content?.toLowerCase().includes(search);
 
@@ -1761,6 +1764,7 @@ export default function AnnouncementManagement() {
     setFormData({
       title: template.name,
       content: template.content,
+      image_url: '',
       css_styles: template.css_styles || '',
       js_scripts: template.js_scripts || '',
       type: template.type,
@@ -1781,6 +1785,7 @@ export default function AnnouncementManagement() {
       setFormData({
         title: '',
         content: '',
+        image_url: '',
         css_styles: '',
         js_scripts: '',
         type: 'info',
@@ -1791,8 +1796,9 @@ export default function AnnouncementManagement() {
       });
     } else if (type === 'edit' && announcement) {
       setFormData({
-        title: announcement.title,
-        content: announcement.content,
+        title: announcement.title ?? '',
+        content: announcement.content ?? '',
+        image_url: announcement.image_url ?? '',
         css_styles: announcement.css_styles || '',
         js_scripts: announcement.js_scripts || '',
         type: announcement.type,
@@ -1815,6 +1821,7 @@ export default function AnnouncementManagement() {
     setFormData({
       title: '',
       content: '',
+      image_url: '',
       css_styles: '',
       js_scripts: '',
       type: 'info',
@@ -1840,13 +1847,6 @@ export default function AnnouncementManagement() {
 
       // Validation
       const errors: Record<string, string> = {};
-      
-      if (!formData.title?.trim()) {
-        errors.title = 'Le titre est requis';
-      }
-      if (!formData.content?.trim()) {
-        errors.content = 'Le contenu est requis';
-      }
       
       // Validation des dates (obligatoires pour la création)
       if (modalType === 'create') {
@@ -1880,9 +1880,17 @@ export default function AnnouncementManagement() {
         return;
       }
 
+      const normalizedTitle =
+        typeof formData.title === 'string' && formData.title.trim() ? formData.title : null;
+      const normalizedContent =
+        typeof formData.content === 'string' && formData.content.trim() ? formData.content : null;
+      const normalizedImageUrl =
+        typeof formData.image_url === 'string' && formData.image_url.trim() ? formData.image_url : null;
+
       const payload = {
-        title: formData.title,
-        content: formData.content,
+        title: normalizedTitle,
+        content: normalizedContent,
+        image_url: normalizedImageUrl,
         css_styles: formData.css_styles || '',
         js_scripts: formData.js_scripts || '',
         type: formData.type,
@@ -2230,11 +2238,11 @@ export default function AnnouncementManagement() {
                       <td className="px-4 lg:px-6 py-4">
                         <div>
                           <div className="text-sm font-medium text-gray-900 mb-1">
-                            {announcement.title}
+                            {announcement.title || 'Sans titre'}
                           </div>
                           <div 
                             className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2"
-                            dangerouslySetInnerHTML={{ __html: announcement.content }}
+                            dangerouslySetInnerHTML={{ __html: announcement.content || '' }}
                             style={{ 
                               maxHeight: '3rem',
                               overflow: 'hidden',
@@ -2332,7 +2340,7 @@ export default function AnnouncementManagement() {
                 <div key={announcement.id} className="p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="text-sm font-medium text-gray-900 flex-1 pr-2">
-                      {announcement.title}
+                      {announcement.title || 'Sans titre'}
                     </h3>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
@@ -2360,7 +2368,7 @@ export default function AnnouncementManagement() {
                   </div>
                   <div 
                     className="text-xs text-gray-600 mb-3 line-clamp-2"
-                    dangerouslySetInnerHTML={{ __html: announcement.content }}
+                    dangerouslySetInnerHTML={{ __html: announcement.content || '' }}
                     style={{ 
                       maxHeight: '2.5rem',
                       overflow: 'hidden'
@@ -2462,7 +2470,7 @@ export default function AnnouncementManagement() {
                     Êtes-vous sûr de vouloir supprimer cette annonce ?
                   </h3>
                   <p className="text-sm text-gray-500 mb-2">
-                    <strong>{selectedAnnouncement?.title}</strong>
+                    <strong>{selectedAnnouncement?.title || 'Sans titre'}</strong>
                   </p>
                   <p className="text-sm text-gray-500 mb-6">
                     Cette action est irréversible.
@@ -2497,7 +2505,7 @@ export default function AnnouncementManagement() {
                   <div>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900">
-                        {selectedAnnouncement.title}
+                        {selectedAnnouncement.title || 'Sans titre'}
                       </h3>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${getTypeBadgeColor(selectedAnnouncement.type)}`}>
                         {getTypeIcon(selectedAnnouncement.type)}
@@ -2513,7 +2521,7 @@ export default function AnnouncementManagement() {
                     </label>
                     <div 
                       className="p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200 overflow-x-auto"
-                      dangerouslySetInnerHTML={{ __html: selectedAnnouncement.content }}
+                      dangerouslySetInnerHTML={{ __html: selectedAnnouncement.content || '' }}
                       style={{
                         ...(selectedAnnouncement.css_styles ? {} : {}),
                         maxWidth: '100%'
@@ -2523,6 +2531,28 @@ export default function AnnouncementManagement() {
                       <style>{selectedAnnouncement.css_styles}</style>
                     )}
                   </div>
+                  {selectedAnnouncement.image_url && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Image
+                      </label>
+                      <div className="flex flex-col gap-2">
+                        <a
+                          href={selectedAnnouncement.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm text-green-700 underline break-all"
+                        >
+                          {selectedAnnouncement.image_url}
+                        </a>
+                        <img
+                          src={selectedAnnouncement.image_url}
+                          alt={selectedAnnouncement.title || 'Annonce'}
+                          className="max-h-56 w-auto rounded border border-gray-200"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Dates */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2603,7 +2633,7 @@ export default function AnnouncementManagement() {
                   <div className="grid grid-cols-1 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Titre <span className="text-red-500">*</span>
+                        Titre
                       </label>
                       <input
                         type="text"
@@ -2611,6 +2641,18 @@ export default function AnnouncementManagement() {
                         onChange={(e) => handleInputChange('title', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Titre de l'annonce"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Image URL (optionnel)
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.image_url || ''}
+                        onChange={(e) => handleInputChange('image_url', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="https://..."
                       />
                     </div>
 
@@ -2750,7 +2792,7 @@ export default function AnnouncementManagement() {
                     {builderTab === 'content' && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Contenu HTML <span className="text-red-500">*</span>
+                          Contenu HTML
                         </label>
                         <textarea
                           value={formData.content || ''}
@@ -2876,3 +2918,4 @@ export default function AnnouncementManagement() {
     </div>
   );
 }
+

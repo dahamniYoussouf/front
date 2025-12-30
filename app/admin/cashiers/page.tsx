@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
 import {
   Search,
   Edit,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 type CashierStatus = 'active' | 'on_break' | 'offline' | 'suspended' | string;
 
@@ -66,6 +67,7 @@ interface CreateCashierForm {
   first_name: string;
   last_name: string;
   phone: string;
+  profile_image_url: string;
   restaurant_id: string;
   permissions: Permissions;
 }
@@ -92,11 +94,15 @@ export default function CashierManagement() {
     first_name: '',
     last_name: '',
     phone: '',
+    profile_image_url: '',
     restaurant_id: '',
     permissions: { ...defaultPermissions },
   });
 
   const [editForm, setEditForm] = useState<Partial<Cashier>>({});
+  const [uploadingImage, setUploadingImage] = useState<boolean>(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUploadError, setImageUploadError] = useState<string>('');
 
   useEffect(() => {
     fetchCashiers();
@@ -106,6 +112,14 @@ export default function CashierManagement() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterStatus]);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   const fetchCashiers = async () => {
     try {
@@ -148,6 +162,75 @@ export default function CashierManagement() {
     }
   };
 
+  const resetImageState = () => {
+    setImagePreview(null);
+    setImageUploadError('');
+    setUploadingImage(false);
+  };
+
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>, target: 'create' | 'edit') => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setImageUploadError('');
+
+    if (!file.type.startsWith('image/')) {
+      setImageUploadError('Veuillez selectionner une image valide.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageUploadError("L'image ne doit pas depasser 5 MB.");
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_URL}/api/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error("Echec de l'upload de l'image.");
+      }
+
+      const data = await response.json().catch(() => ({}));
+      const url = typeof data?.url === 'string' ? data.url : '';
+      if (!url) {
+        throw new Error("URL de l'image manquante.");
+      }
+
+      if (target === 'create') {
+        setCreateForm((prev) => ({ ...prev, profile_image_url: url }));
+      } else {
+        setEditForm((prev) => ({ ...prev, profile_image_url: url }));
+      }
+      setImagePreview(URL.createObjectURL(file));
+    } catch (err: any) {
+      setImageUploadError(err?.message || "Erreur lors de l'upload.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleRemoveImage = (target: 'create' | 'edit') => {
+    setImageUploadError('');
+    setImagePreview(null);
+    if (target === 'create') {
+      setCreateForm((prev) => ({ ...prev, profile_image_url: '' }));
+    } else {
+      setEditForm((prev) => ({ ...prev, profile_image_url: '' }));
+    }
+  };
+
   const resetAndClose = () => {
     setShowModal(false);
     setModalType('');
@@ -158,10 +241,12 @@ export default function CashierManagement() {
       first_name: '',
       last_name: '',
       phone: '',
+      profile_image_url: '',
       restaurant_id: '',
       permissions: { ...defaultPermissions },
     });
     setEditForm({});
+    resetImageState();
   };
 
   const handleCreate = async () => {
@@ -170,13 +255,18 @@ export default function CashierManagement() {
       const token = localStorage.getItem('access_token');
       if (!token) throw new Error('Non authentifi?');
 
+      const payload = {
+        ...createForm,
+        profile_image_url: createForm.profile_image_url || null
+      };
+
       const res = await fetch(`${API_URL}/auth/register/cashier`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(createForm),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -202,6 +292,9 @@ export default function CashierManagement() {
 
       const payload: any = { ...editForm };
       delete payload.id;
+      if (payload.profile_image_url === '') {
+        payload.profile_image_url = null;
+      }
 
       const res = await fetch(`${API_URL}/cashier/update/${selectedCashier.id}`, {
         method: 'PUT',
@@ -256,6 +349,7 @@ export default function CashierManagement() {
   };
 
   const openModal = (type: ModalType, cashier?: Cashier) => {
+    resetImageState();
     setModalType(type);
     setShowModal(true);
     if (cashier) {
@@ -269,6 +363,7 @@ export default function CashierManagement() {
         is_active: cashier.is_active,
         permissions: cashier.permissions,
         restaurant_id: cashier.restaurant_id,
+        profile_image_url: cashier.profile_image_url ?? ''
       });
     } else {
       setSelectedCashier(null);
@@ -309,6 +404,10 @@ export default function CashierManagement() {
   const startIndex = (currentPage - 1) * pageSize;
   const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
   const showingTo = Math.min(startIndex + cashiers.length, totalCount);
+  const createImageUrl = imagePreview || createForm.profile_image_url;
+  const editImageUrl =
+    imagePreview ||
+    (editForm.profile_image_url !== undefined ? editForm.profile_image_url : selectedCashier?.profile_image_url);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -710,6 +809,65 @@ export default function CashierManagement() {
                     </div>
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Photo de profil (optionnel)
+                    </label>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+                      {createImageUrl ? (
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                          <img
+                            src={createImageUrl || ''}
+                            alt="Apercu"
+                            className="h-20 w-20 rounded-md object-cover border border-gray-200"
+                          />
+                          <div className="flex-1">
+                            {!imagePreview && createForm.profile_image_url ? (
+                              <p className="text-xs text-gray-500 break-all">{createForm.profile_image_url}</p>
+                            ) : null}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage('create')}
+                            disabled={uploadingImage || saveLoading}
+                            className="text-sm text-red-600 hover:text-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            Supprimer
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">Aucune image selectionnee.</p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label
+                          htmlFor="cashier-create-image-upload"
+                          className={`inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white ${
+                            uploadingImage || saveLoading
+                              ? 'cursor-not-allowed opacity-60'
+                              : 'cursor-pointer hover:bg-gray-100'
+                          }`}
+                        >
+                          {uploadingImage
+                            ? 'Upload en cours...'
+                            : createImageUrl
+                            ? "Changer l'image"
+                            : 'Telecharger une image'}
+                        </label>
+                        <input
+                          id="cashier-create-image-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleImageUpload(e, 'create')}
+                          disabled={uploadingImage || saveLoading}
+                          className="sr-only"
+                        />
+                        <span className="text-xs text-gray-500">Formats image, max 5 MB</span>
+                      </div>
+                    </div>
+                    {imageUploadError && (
+                      <p className="mt-1 text-xs text-red-600">{imageUploadError}</p>
+                    )}
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Permissions
                     </label>
@@ -959,22 +1117,81 @@ export default function CashierManagement() {
                         <option value="suspended">Suspendu</option>
                       </select>
                     </div>
-                    <div className="flex items-center gap-4 pt-6">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={!!editForm.is_active}
-                          onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
-                          className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                  <div className="flex items-center gap-4 pt-6">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!editForm.is_active}
+                        onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
+                        className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Compte actif</span>
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Photo de profil (optionnel)
+                  </label>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+                    {editImageUrl ? (
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <img
+                          src={editImageUrl || ''}
+                          alt="Apercu"
+                          className="h-20 w-20 rounded-md object-cover border border-gray-200"
                         />
-                        <span className="text-sm font-medium text-gray-700">Compte actif</span>
+                        <div className="flex-1">
+                          {!imagePreview && editForm.profile_image_url ? (
+                            <p className="text-xs text-gray-500 break-all">{editForm.profile_image_url}</p>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage('edit')}
+                          disabled={uploadingImage || saveLoading}
+                          className="text-sm text-red-600 hover:text-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">Aucune image selectionnee.</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label
+                        htmlFor="cashier-edit-image-upload"
+                        className={`inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white ${
+                          uploadingImage || saveLoading
+                            ? 'cursor-not-allowed opacity-60'
+                            : 'cursor-pointer hover:bg-gray-100'
+                        }`}
+                      >
+                        {uploadingImage
+                          ? 'Upload en cours...'
+                          : editImageUrl
+                          ? "Changer l'image"
+                          : 'Telecharger une image'}
                       </label>
+                      <input
+                        id="cashier-edit-image-upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, 'edit')}
+                        disabled={uploadingImage || saveLoading}
+                        className="sr-only"
+                      />
+                      <span className="text-xs text-gray-500">Formats image, max 5 MB</span>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Permissions
-                    </label>
+                  {imageUploadError && (
+                    <p className="mt-1 text-xs text-red-600">{imageUploadError}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Permissions
+                  </label>
                     <div className="grid grid-cols-2 gap-2">
                       {selectedCashier.permissions && Object.keys(selectedCashier.permissions).map((key) => (
                         <label key={key} className="flex items-center gap-2 text-sm">

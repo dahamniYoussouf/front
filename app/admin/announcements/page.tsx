@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
 import {
   Search,
   Edit,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 // ==== TYPES ====
 
@@ -1622,6 +1623,9 @@ export default function AnnouncementManagement() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [restaurants, setRestaurants] = useState<{ id: string; name: string }[]>([]);
   const [restaurantError, setRestaurantError] = useState<string>('');
+  const [uploadingImage, setUploadingImage] = useState<boolean>(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUploadError, setImageUploadError] = useState<string>('');
   
   // Builder state
   const [builderTab, setBuilderTab] = useState<BuilderTab>('content');
@@ -1642,6 +1646,14 @@ export default function AnnouncementManagement() {
   useEffect(() => {
     fetchAnnouncements();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   useEffect(() => {
     let active = true;
@@ -1759,6 +1771,12 @@ export default function AnnouncementManagement() {
     return matchesSearch && matchesType && matchesActive;
   });
 
+  const resetImageState = () => {
+    setImagePreview(null);
+    setImageUploadError('');
+    setUploadingImage(false);
+  };
+
   // Handle actions
   const handleLoadTemplate = (template: typeof ANNOUNCEMENT_TEMPLATES[0]) => {
     setFormData({
@@ -1773,6 +1791,7 @@ export default function AnnouncementManagement() {
       end_date: '',
       restaurant_id: ''
     });
+    resetImageState();
     setShowTemplateMenu(false);
     setBuilderTab('content');
   };
@@ -1794,6 +1813,7 @@ export default function AnnouncementManagement() {
         end_date: '',
         restaurant_id: ''
       });
+      resetImageState();
     } else if (type === 'edit' && announcement) {
       setFormData({
         title: announcement.title ?? '',
@@ -1807,6 +1827,7 @@ export default function AnnouncementManagement() {
         end_date: announcement.end_date ? announcement.end_date.split('T')[0] : '',
         restaurant_id: announcement.restaurant_id ?? ''
       });
+      resetImageState();
     }
 
     setModalType(type);
@@ -1829,9 +1850,65 @@ export default function AnnouncementManagement() {
       start_date: '',
       end_date: ''
     });
+    resetImageState();
     setSaveLoading(false);
     setError('');
     setFormErrors({});
+  };
+
+  const handleImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setImageUploadError('');
+
+    if (!file.type.startsWith('image/')) {
+      setImageUploadError('Veuillez selectionner une image valide.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageUploadError("L'image ne doit pas depasser 5 MB.");
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const payload = new FormData();
+      payload.append('file', file);
+      const response = await fetch(`${API_URL}/api/upload`, {
+        method: 'POST',
+        body: payload
+      });
+
+      if (!response.ok) {
+        throw new Error("Echec de l'upload de l'image.");
+      }
+
+      const data = await response.json().catch(() => ({}));
+      const url = typeof data?.url === 'string' ? data.url : '';
+      if (!url) {
+        throw new Error("URL de l'image manquante.");
+      }
+
+      handleInputChange('image_url', url);
+      setImagePreview(URL.createObjectURL(file));
+    } catch (err: any) {
+      setImageUploadError(err?.message || "Erreur lors de l'upload.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImageUploadError('');
+    setImagePreview(null);
+    handleInputChange('image_url', '');
   };
 
   const handleSave = async () => {
@@ -2645,15 +2722,58 @@ export default function AnnouncementManagement() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Image URL (optionnel)
+                        Image (optionnel)
                       </label>
-                      <input
-                        type="url"
-                        value={formData.image_url || ''}
-                        onChange={(e) => handleInputChange('image_url', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="https://..."
-                      />
+                      <div className="w-full rounded-lg border border-gray-300 bg-gray-50 p-3 space-y-3">
+                        {imagePreview || formData.image_url ? (
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <img
+                              src={imagePreview || formData.image_url || ''}
+                              alt={formData.title || 'Annonce'}
+                              className="h-20 w-20 rounded-md object-cover border border-gray-200"
+                            />
+                            <div className="flex-1">
+                              {!imagePreview && formData.image_url ? (
+                                <p className="text-xs text-gray-500 break-all">{formData.image_url}</p>
+                              ) : null}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleRemoveImage}
+                              disabled={uploadingImage || saveLoading}
+                              className="text-sm text-red-600 hover:text-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              Supprimer
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">Aucune image selectionnee.</p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label
+                            htmlFor="announcement-image-upload"
+                            className={`inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white ${
+                              uploadingImage || saveLoading
+                                ? 'cursor-not-allowed opacity-60'
+                                : 'cursor-pointer hover:bg-gray-100'
+                            }`}
+                          >
+                            {uploadingImage ? 'Upload en cours...' : 'Telecharger une image'}
+                          </label>
+                          <input
+                            id="announcement-image-upload"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            disabled={uploadingImage || saveLoading}
+                            className="sr-only"
+                          />
+                          <span className="text-xs text-gray-500">Formats image, max 5 MB</span>
+                        </div>
+                      </div>
+                      {imageUploadError && (
+                        <p className="mt-1 text-xs text-red-600">{imageUploadError}</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

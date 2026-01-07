@@ -75,11 +75,11 @@ const isPromotionFieldVisible = (fieldName: string, state: Record<string, unknow
   }
 
   if (fieldName === 'buy_quantity' || fieldName === 'free_quantity') {
-    return type === 'buy_x_get_y';
+    return false;
   }
 
   if (fieldName === 'custom_message') {
-    return type === 'other' || type === 'buy_x_get_y';
+    return type === 'other';
   }
 
   if (fieldName === 'restaurant_id') {
@@ -87,18 +87,17 @@ const isPromotionFieldVisible = (fieldName: string, state: Record<string, unknow
       hasType &&
       (type === 'percentage' ||
         type === 'amount' ||
-        type === 'buy_x_get_y' ||
         scope === 'restaurant' ||
         scope === 'menu_item')
     );
   }
 
   if (fieldName === 'menu_item_id') {
-    return hasType && (type === 'buy_x_get_y' || scope === 'menu_item');
+    return hasType && scope === 'menu_item';
   }
 
   if (fieldName === 'menu_item_ids') {
-    return hasType && (type === 'percentage' || type === 'amount' || (scope === 'menu_item' && type !== 'buy_x_get_y'));
+    return hasType && (type === 'percentage' || type === 'amount' || scope === 'menu_item');
   }
 
   if (

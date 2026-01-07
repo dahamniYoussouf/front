@@ -129,10 +129,8 @@ const deriveBadgePreview = (type: string | undefined, discountValue?: string | n
       return value ? `-${value} ${currency || 'DZD'}` : 'Montant';
     case 'free_delivery':
       return 'Livraison gratuite';
-    case 'buy_x_get_y':
-      return customMessage?.slice(0, 80) || '1 acheté = 1 offert';
     case 'other':
-      return customMessage?.slice(0, 80) || 'Offre spéciale';
+      return customMessage?.slice(0, 80) || 'Offre spAcciale';
     default:
       return '';
   }
@@ -262,8 +260,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
         options: [
           { value: 'percentage', label: 'Pourcentage' },
           { value: 'amount', label: 'Montant' },
-          { value: 'free_delivery', label: 'Livraison offerte' },
-          { value: 'buy_x_get_y', label: '1 acheté = 1 offert' },
+          { value: 'free_delivery', label: 'Livraison offerte' },
           { value: 'other', label: 'Autre' }
         ],
         onValueChange: (value: string | number | boolean, context: ModuleFieldOnChangeContext) => {
@@ -293,7 +290,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
           const type = String(state.type ?? '').trim();
           if (!type) return false;
           const scope = String(state.scope ?? '').trim();
-          return ['percentage', 'amount', 'buy_x_get_y'].includes(type) || scope === 'restaurant' || scope === 'menu_item';
+          return ['percentage', 'amount'].includes(type) || scope === 'restaurant' || scope === 'menu_item';
         },
         type: 'select',
         placeholder: 'Sélectionnez un restaurant (optionnel)',
@@ -307,7 +304,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
           const type = String(state.type ?? '').trim();
           if (!type) return false;
           const scope = String(state.scope ?? '').trim();
-          return type === 'buy_x_get_y' || scope === 'menu_item';
+          return scope === 'menu_item';
         },
         type: 'select',
         placeholder: 'Sélectionnez un plat',
@@ -321,7 +318,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
           const type = String(state.type ?? '').trim();
           if (!type) return false;
           const scope = String(state.scope ?? '').trim();
-          return type === 'percentage' || type === 'amount' || (scope === 'menu_item' && type !== 'buy_x_get_y');
+          return type === 'percentage' || type === 'amount' || scope === 'menu_item';
         },
         type: 'textarea',
         hint: 'Séparez les UUIDs par une virgule ou un saut de ligne pour cibler plusieurs plats'
@@ -329,9 +326,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       { name: 'discount_value', label: 'Valeur du rabais', type: 'number', placeholder: '25', hint: 'Requis pour les types pourcentage et montant' },
       { name: 'currency', label: 'Devise', type: 'text', placeholder: 'DZD', hint: 'Défaut DZD si non défini' },
       { name: 'badge_text', label: 'Badge texte', type: 'text', placeholder: '-20%', hint: 'Visible sur les cartes; généré automatiquement si laissé vide' },
-      { name: 'custom_message', label: 'Message structuré', type: 'textarea', hint: 'Utilisé pour les types autres ou buy_x_get_y' },
-      { name: 'buy_quantity', label: 'Quantité achetée', type: 'number', placeholder: '1', hint: 'Requis pour type 1 acheté = 1 offert' },
-      { name: 'free_quantity', label: 'Quantité offerte', type: 'number', placeholder: '1', hint: 'Requis pour type 1 acheté = 1 offert' },
+      { name: 'custom_message', label: 'Message structure', type: 'textarea', hint: 'Utilise pour le type autre' },
       { name: 'start_date', label: 'Début', type: 'date' },
       { name: 'end_date', label: 'Fin', type: 'date' },
       { name: 'is_active', label: 'Actif', type: 'checkbox', default: true }

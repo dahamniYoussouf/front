@@ -338,7 +338,6 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
           { value: 'percentage', label: 'Pourcentage' },
           { value: 'amount', label: 'Montant' },
           { value: 'free_delivery', label: 'Livraison offerte' },
-          { value: 'buy_x_get_y', label: '1 acheté = 1 offert' },
           { value: 'other', label: 'Autre' }
         ]
       },
@@ -349,7 +348,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
           const type = getPromotionType(state);
           if (!type) return false;
           const scope = getPromotionScope(state);
-          return ['percentage', 'amount', 'buy_x_get_y'].includes(type) || scope === 'restaurant' || scope === 'menu_item';
+          return ['percentage', 'amount'].includes(type) || scope === 'restaurant' || scope === 'menu_item';
         },
         type: 'select',
         placeholder: 'Sélectionnez un restaurant (optionnel)',
@@ -377,7 +376,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
           const type = getPromotionType(state);
           if (!type) return false;
           const scope = getPromotionScope(state);
-          return type === 'buy_x_get_y' || scope === 'menu_item';
+          return scope === 'menu_item';
         },
         type: 'select',
         placeholder: "SAclectionnez un restaurant d'abord",
@@ -391,7 +390,7 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
           const type = getPromotionType(state);
           if (!type) return false;
           const scope = getPromotionScope(state);
-          return type === 'percentage' || type === 'amount' || (scope === 'menu_item' && type !== 'buy_x_get_y');
+          return type === 'percentage' || type === 'amount' || scope === 'menu_item';
         },
         type: 'textarea',
         placeholder: 'UUID1, UUID2, ...',
@@ -417,24 +416,8 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
         placeholder: 'Ex: Offre du jour',
         visibleWhen: ({ state }) => {
           const type = getPromotionType(state);
-          return type === 'other' || type === 'buy_x_get_y';
+          return type === 'other';
         }
-      },
-      {
-        name: 'buy_quantity',
-        label: 'QuantitAc achetAce',
-        type: 'number',
-        placeholder: '1',
-        required: true,
-        visibleWhen: ({ state }) => getPromotionType(state) === 'buy_x_get_y'
-      },
-      {
-        name: 'free_quantity',
-        label: 'QuantitAc offerte',
-        type: 'number',
-        placeholder: '1',
-        required: true,
-        visibleWhen: ({ state }) => getPromotionType(state) === 'buy_x_get_y'
       },
       { name: 'start_date', label: 'Début', type: 'date' },
       { name: 'end_date', label: 'Fin', type: 'date' },

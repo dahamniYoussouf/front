@@ -121,7 +121,7 @@ type MenuItemForm = {
 
 type PromotionCreateForm = {
   title: string;
-  type: 'percentage' | 'amount' | 'other';
+  type: 'percentage' | 'amount' | 'free_delivery' | 'other';
   discount_value: string;
   custom_message: string;
   badge_text: string;
@@ -137,6 +137,9 @@ const parseNumber = (value: string) => {
 };
 
 const formatDA = (value: number) => `${new Intl.NumberFormat('fr-FR').format(value)} DA`;
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const getPromotionLabel = (promotion: {
   id: string;
@@ -217,6 +220,33 @@ const getApiErrorMessage = (err: unknown, fallback: string) => {
   return fallback;
 };
 
+const getAuthToken = () => {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem('access_token') || '';
+};
+
+const uploadImageFile = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getAuthToken();
+  const response = await fetch(`${API_URL}/api/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error("Echec de l'upload de l'image.");
+  }
+
+  const data = await response.json();
+  if (!data?.url) {
+    throw new Error("URL de l'image manquante.");
+  }
+  return data.url as string;
+};
+
 export default function RestaurantDetailsPage() {
   const router = useRouter();
   const params = useParams();
@@ -247,6 +277,13 @@ export default function RestaurantDetailsPage() {
     temps_preparation: '',
     is_available: true
   });
+
+  const [categoryImageUploading, setCategoryImageUploading] = useState(false);
+  const [categoryImagePreview, setCategoryImagePreview] = useState<string | null>(null);
+  const [categoryImageError, setCategoryImageError] = useState('');
+  const [itemImageUploading, setItemImageUploading] = useState(false);
+  const [itemImagePreview, setItemImagePreview] = useState<string | null>(null);
+  const [itemImageError, setItemImageError] = useState('');
 
   const [additionModalOpen, setAdditionModalOpen] = useState(false);
   const [additionModalMode, setAdditionModalMode] = useState<AdditionModalMode>('create');
@@ -328,6 +365,20 @@ export default function RestaurantDetailsPage() {
     loadPromotions();
   }, [loadMenu, loadPromotions]);
 
+  React.useEffect(() => {
+    if (categoryImagePreview && categoryImagePreview.startsWith('blob:')) {
+      return () => URL.revokeObjectURL(categoryImagePreview);
+    }
+    return undefined;
+  }, [categoryImagePreview]);
+
+  React.useEffect(() => {
+    if (itemImagePreview && itemImagePreview.startsWith('blob:')) {
+      return () => URL.revokeObjectURL(itemImagePreview);
+    }
+    return undefined;
+  }, [itemImagePreview]);
+
   const restaurant = menu?.restaurant;
   const categories = useMemo(() => menu?.categories || [], [menu]);
   const sortedCategories = useMemo(() => {
@@ -405,7 +456,7 @@ export default function RestaurantDetailsPage() {
   const hasFilters = menuQuery.trim().length > 0 || availabilityFilter !== 'all';
 
   const editablePromotions = useMemo(() => {
-    const allowedTypes = new Set(['percentage', 'amount', 'other']);
+    const allowedTypes = new Set(['percentage', 'amount', 'free_delivery', 'other']);
     return [...promotionOptions]
       .filter((promotion) => {
         const type = String(promotion.type || '').toLowerCase();
@@ -460,17 +511,32 @@ export default function RestaurantDetailsPage() {
     setPromotionSelection((prev) => (prev ? prev : currentPromotionId || ''));
   }, [promotionModalOpen, promotionModalItem, currentPromotionId]);
 
+  const resetCategoryImageState = () => {
+    setCategoryImagePreview(null);
+    setCategoryImageError('');
+    setCategoryImageUploading(false);
+  };
+
+  const resetItemImageState = () => {
+    setItemImagePreview(null);
+    setItemImageError('');
+    setItemImageUploading(false);
+  };
+
   const closeModal = () => {
     setModal('');
     setSelectedCategory(null);
     setSelectedItem(null);
     setModalError('');
+    resetCategoryImageState();
+    resetItemImageState();
   };
 
   const openCreateCategory = () => {
     setSelectedCategory(null);
     setCategoryForm({ nom: '', description: '', icone_url: '', ordre_affichage: '' });
     setModalError('');
+    resetCategoryImageState();
     setModal('create-category');
   };
 
@@ -483,6 +549,7 @@ export default function RestaurantDetailsPage() {
       ordre_affichage: category.ordre_affichage != null ? String(category.ordre_affichage) : ''
     });
     setModalError('');
+    resetCategoryImageState();
     setModal('edit-category');
   };
 
@@ -504,6 +571,7 @@ export default function RestaurantDetailsPage() {
       is_available: true
     });
     setModalError('');
+    resetItemImageState();
     setModal('create-item');
   };
 
@@ -519,6 +587,7 @@ export default function RestaurantDetailsPage() {
       is_available: !!item.is_available
     });
     setModalError('');
+    resetItemImageState();
     setModal('edit-item');
   };
 
@@ -526,6 +595,74 @@ export default function RestaurantDetailsPage() {
     setSelectedItem(item);
     setModalError('');
     setModal('delete-item');
+  };
+
+  const handleCategoryImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setCategoryImageError('');
+    if (!file.type.startsWith('image/')) {
+      setCategoryImageError('Veuillez selectionner une image valide.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setCategoryImageError("L'image ne doit pas depasser 5 MB.");
+      return;
+    }
+
+    setCategoryImageUploading(true);
+    try {
+      const url = await uploadImageFile(file);
+      setCategoryForm((p) => ({ ...p, icone_url: url }));
+      setCategoryImagePreview(URL.createObjectURL(file));
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error && err.message ? err.message : "Erreur lors de l'upload.";
+      setCategoryImageError(message);
+    } finally {
+      setCategoryImageUploading(false);
+    }
+  };
+
+  const removeCategoryImage = () => {
+    setCategoryForm((p) => ({ ...p, icone_url: '' }));
+    setCategoryImagePreview(null);
+    setCategoryImageError('');
+  };
+
+  const handleItemImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setItemImageError('');
+    if (!file.type.startsWith('image/')) {
+      setItemImageError('Veuillez selectionner une image valide.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setItemImageError("L'image ne doit pas depasser 5 MB.");
+      return;
+    }
+
+    setItemImageUploading(true);
+    try {
+      const url = await uploadImageFile(file);
+      setItemForm((p) => ({ ...p, photo_url: url }));
+      setItemImagePreview(URL.createObjectURL(file));
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error && err.message ? err.message : "Erreur lors de l'upload.";
+      setItemImageError(message);
+    } finally {
+      setItemImageUploading(false);
+    }
+  };
+
+  const removeItemImage = () => {
+    setItemForm((p) => ({ ...p, photo_url: '' }));
+    setItemImagePreview(null);
+    setItemImageError('');
   };
 
   const onCreateCategory = async () => {
@@ -1257,6 +1394,7 @@ export default function RestaurantDetailsPage() {
                         >
                           <option value="percentage">Pourcentage</option>
                           <option value="amount">Montant</option>
+                          <option value="free_delivery">Livraison gratuite</option>
                           <option value="other">Autre</option>
                         </select>
                       </div>
@@ -1926,9 +2064,10 @@ export default function RestaurantDetailsPage() {
                       </label>
                       <input
                         value={categoryForm.icone_url}
-                        onChange={(e) =>
-                          setCategoryForm((p) => ({ ...p, icone_url: e.target.value }))
-                        }
+                        onChange={(e) => {
+                          setCategoryForm((p) => ({ ...p, icone_url: e.target.value }));
+                          setCategoryImagePreview(null);
+                        }}
                         className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         placeholder="https://..."
                       />
@@ -1947,6 +2086,58 @@ export default function RestaurantDetailsPage() {
                         placeholder="0"
                         inputMode="numeric"
                       />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Upload icone
+                    </label>
+                    <div className="mt-2 rounded-lg border border-dashed border-gray-200 p-3 dark:border-slate-700">
+                      {categoryImagePreview || categoryForm.icone_url ? (
+                        <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-900">
+                          <img
+                            src={categoryImagePreview || categoryForm.icone_url}
+                            alt="Apercu icone"
+                            className="h-40 w-full object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={removeCategoryImage}
+                            className="absolute right-2 top-2 rounded-full bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700"
+                          >
+                            Retirer
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-slate-400">
+                          Aucune image selectionnee.
+                        </p>
+                      )}
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <label
+                          htmlFor="category-icon-upload"
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          {categoryImageUploading ? 'Upload en cours...' : 'Telecharger une image'}
+                        </label>
+                        <input
+                          id="category-icon-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCategoryImageUpload}
+                          disabled={categoryImageUploading}
+                          className="hidden"
+                        />
+                        <span className="text-xs text-gray-500 dark:text-slate-400">
+                          Formats image, max 5 MB
+                        </span>
+                      </div>
+
+                      {categoryImageError ? (
+                        <p className="mt-2 text-xs text-red-600">{categoryImageError}</p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -2021,7 +2212,10 @@ export default function RestaurantDetailsPage() {
                       </label>
                       <input
                         value={itemForm.photo_url}
-                        onChange={(e) => setItemForm((p) => ({ ...p, photo_url: e.target.value }))}
+                        onChange={(e) => {
+                          setItemForm((p) => ({ ...p, photo_url: e.target.value }));
+                          setItemImagePreview(null);
+                        }}
                         className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                         placeholder="https://..."
                       />
@@ -2039,6 +2233,58 @@ export default function RestaurantDetailsPage() {
                         placeholder="10"
                         inputMode="numeric"
                       />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
+                      Upload photo
+                    </label>
+                    <div className="mt-2 rounded-lg border border-dashed border-gray-200 p-3 dark:border-slate-700">
+                      {itemImagePreview || itemForm.photo_url ? (
+                        <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-900">
+                          <img
+                            src={itemImagePreview || itemForm.photo_url}
+                            alt="Apercu plat"
+                            className="h-40 w-full object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={removeItemImage}
+                            className="absolute right-2 top-2 rounded-full bg-red-600 px-2 py-1 text-xs font-semibold text-white hover:bg-red-700"
+                          >
+                            Retirer
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-slate-400">
+                          Aucune image selectionnee.
+                        </p>
+                      )}
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <label
+                          htmlFor="item-photo-upload"
+                          className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          {itemImageUploading ? 'Upload en cours...' : 'Telecharger une image'}
+                        </label>
+                        <input
+                          id="item-photo-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleItemImageUpload}
+                          disabled={itemImageUploading}
+                          className="hidden"
+                        />
+                        <span className="text-xs text-gray-500 dark:text-slate-400">
+                          Formats image, max 5 MB
+                        </span>
+                      </div>
+
+                      {itemImageError ? (
+                        <p className="mt-2 text-xs text-red-600">{itemImageError}</p>
+                      ) : null}
                     </div>
                   </div>
 

@@ -31,6 +31,12 @@ type Permissions = {
   can_view_reports: boolean;
 };
 
+type RestaurantOption = {
+  id: string;
+  name: string;
+  address?: string;
+};
+
 const defaultPermissions: Permissions = {
   can_create_orders: true,
   can_cancel_orders: false,
@@ -43,6 +49,7 @@ interface Cashier {
   id: string;
   user_id: string;
   restaurant_id: string;
+  restaurant?: RestaurantOption | null;
   cashier_code: string;
   first_name: string;
   last_name: string;
@@ -76,6 +83,9 @@ export default function CashierManagement() {
   const [cashiers, setCashiers] = useState<Cashier[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [restaurants, setRestaurants] = useState<RestaurantOption[]>([]);
+  const [restaurantsLoading, setRestaurantsLoading] = useState<boolean>(false);
+  const [restaurantError, setRestaurantError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'all' | CashierStatus>('all');
   const [selectedCashier, setSelectedCashier] = useState<Cashier | null>(null);
@@ -107,6 +117,67 @@ export default function CashierManagement() {
   useEffect(() => {
     fetchCashiers();
   }, [currentPage, pageSize, searchTerm, filterStatus]);
+
+  useEffect(() => {
+    let active = true;
+    const isRestaurantEntry = (entry: RestaurantOption | null): entry is RestaurantOption =>
+      Boolean(entry);
+
+    const loadRestaurants = async () => {
+      try {
+        setRestaurantsLoading(true);
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          throw new Error('Non authentifie');
+        }
+        const response = await fetch(`${API_URL}/restaurant/getall`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Impossible de charger la liste des restaurants');
+        }
+
+        const payload = await response.json();
+        const list = Array.isArray(payload?.data) ? payload.data : [];
+
+        if (!active) {
+          return;
+        }
+
+        const formatted: RestaurantOption[] = list
+          .map((entry: { id?: string; name?: string; company_name?: string; address?: string }) => {
+            if (!entry?.id) {
+              return null;
+            }
+            const label = entry.name ?? entry.company_name ?? String(entry.id);
+            return { id: entry.id, name: label, address: entry.address };
+          })
+          .filter(isRestaurantEntry)
+          .sort((a: RestaurantOption, b: RestaurantOption) => a.name.localeCompare(b.name));
+
+        setRestaurants(formatted);
+        setRestaurantError('');
+      } catch (err: any) {
+        console.error('Erreur fetch restaurants:', err);
+        if (active) {
+          setRestaurantError(err?.message || 'Impossible de charger les restaurants');
+        }
+      } finally {
+        if (active) {
+          setRestaurantsLoading(false);
+        }
+      }
+    };
+
+    loadRestaurants();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Réinitialiser à la page 1 quand la recherche ou le filtre change
   useEffect(() => {
@@ -401,6 +472,15 @@ export default function CashierManagement() {
     });
   };
 
+  const resolveRestaurantName = (cashier: Cashier | null) => {
+    if (!cashier) return 'Restaurant inconnu';
+    if (cashier.restaurant?.name) {
+      return cashier.restaurant.name;
+    }
+    const match = restaurants.find((restaurant) => restaurant.id === cashier.restaurant_id);
+    return match?.name || 'Restaurant inconnu';
+  };
+
   const startIndex = (currentPage - 1) * pageSize;
   const showingFrom = totalCount === 0 ? 0 : startIndex + 1;
   const showingTo = Math.min(startIndex + cashiers.length, totalCount);
@@ -408,6 +488,11 @@ export default function CashierManagement() {
   const editImageUrl =
     imagePreview ||
     (editForm.profile_image_url !== undefined ? editForm.profile_image_url : selectedCashier?.profile_image_url);
+  const restaurantPlaceholder = restaurantsLoading
+    ? 'Chargement des restaurants...'
+    : restaurants.length === 0
+    ? 'Aucun restaurant disponible'
+    : 'Selectionner un restaurant';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -582,7 +667,7 @@ export default function CashierManagement() {
                         <div className="text-sm font-mono text-gray-900">{c.cashier_code}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{c.restaurant_id}</div>
+                        <div className="text-sm text-gray-900">{resolveRestaurantName(c)}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {renderStatusBadge(c.status)}
@@ -797,15 +882,23 @@ export default function CashierManagement() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Restaurant ID <span className="text-red-500">*</span>
+                        Restaurant <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="text"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="Restaurant ID"
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
                         value={createForm.restaurant_id}
                         onChange={(e) => setCreateForm({ ...createForm, restaurant_id: e.target.value })}
-                      />
+                      >
+                        <option value="">{restaurantPlaceholder}</option>
+                        {restaurants.map((restaurant) => (
+                          <option key={restaurant.id} value={restaurant.id}>
+                            {restaurant.name}
+                          </option>
+                        ))}
+                      </select>
+                      {restaurantError && (
+                        <p className="mt-1 text-xs text-red-600">{restaurantError}</p>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -1000,9 +1093,9 @@ export default function CashierManagement() {
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Restaurant ID
+                        Restaurant
                       </label>
-                      <p className="text-sm text-gray-900">{selectedCashier.restaurant_id}</p>
+                      <p className="text-sm text-gray-900">{resolveRestaurantName(selectedCashier)}</p>
                     </div>
                   </div>
 
@@ -1116,6 +1209,26 @@ export default function CashierManagement() {
                         <option value="offline">Hors ligne</option>
                         <option value="suspended">Suspendu</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Restaurant
+                      </label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                        value={editForm.restaurant_id || ''}
+                        onChange={(e) => setEditForm({ ...editForm, restaurant_id: e.target.value })}
+                      >
+                        <option value="">{restaurantPlaceholder}</option>
+                        {restaurants.map((restaurant) => (
+                          <option key={restaurant.id} value={restaurant.id}>
+                            {restaurant.name}
+                          </option>
+                        ))}
+                      </select>
+                      {restaurantError && (
+                        <p className="mt-1 text-xs text-red-600">{restaurantError}</p>
+                      )}
                     </div>
                   <div className="flex items-center gap-4 pt-6">
                     <label className="flex items-center gap-2">

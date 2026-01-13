@@ -72,6 +72,52 @@ interface Restaurant {
   opening_hours?: Partial<OpeningHours>;
 }
 
+interface OptionGroup {
+  id: string;
+  nom: string;
+  description?: string | null;
+  is_required: boolean;
+  ordre_affichage?: number | null;
+  additions?: Addition[];
+  options?: Addition[];
+}
+
+interface Addition {
+  id: string;
+  nom: string;
+  description?: string | null;
+  prix: number;
+  is_available?: boolean;
+  option_group_id?: string | null;
+}
+
+interface MenuItem {
+  id: string;
+  nom: string;
+  description?: string | null;
+  prix: number;
+  display_price?: number;
+  photo_url?: string | null;
+  temps_preparation?: number | null;
+  is_available?: boolean;
+  additions?: Addition[];
+  option_groups?: OptionGroup[];
+}
+
+interface MenuCategory {
+  id: string;
+  nom: string;
+  description?: string | null;
+  items?: MenuItem[];
+  items_count?: number;
+}
+
+interface RestaurantMenuDetails {
+  restaurant_id: string;
+  restaurant?: Restaurant;
+  categories?: MenuCategory[];
+}
+
 interface RestaurantFilters {
   categories?: CategoryValue[];
   address?: string;
@@ -133,7 +179,7 @@ interface EditRestaurantForm {
 // API configuration
 // =========================
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Get token from localStorage
 const getAuthToken = () => {
@@ -372,6 +418,33 @@ const DAYS_OF_WEEK: { value: DayKey; label: string }[] = [
   { value: 'sun', label: 'Dimanche' }
 ];
 
+const formatDA = (value?: number | string | null) => {
+  const parsed =
+    typeof value === 'number' ? value : value != null ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return 'N/A';
+  return `${new Intl.NumberFormat('fr-FR').format(parsed)} DA`;
+};
+
+const resolveGroupOptions = (item: MenuItem, group: OptionGroup) => {
+  const direct = (group.additions && group.additions.length ? group.additions : group.options) || [];
+  const itemAdditions = item.additions || [];
+  if (itemAdditions.length === 0) {
+    return direct;
+  }
+  if (direct.length === 0) {
+    return itemAdditions.filter((addition) => addition.option_group_id === group.id);
+  }
+  const merged = [...direct];
+  const ids = new Set(direct.map((option) => option.id));
+  itemAdditions.forEach((addition) => {
+    if (addition.option_group_id === group.id && !ids.has(addition.id)) {
+      merged.push(addition);
+      ids.add(addition.id);
+    }
+  });
+  return merged;
+};
+
 export default function AdminRestaurantManagement() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>('all');
@@ -402,6 +475,9 @@ export default function AdminRestaurantManagement() {
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [detailsMenu, setDetailsMenu] = useState<RestaurantMenuDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState<boolean>(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditRestaurantForm>({
     name: '',
     address: '',
@@ -951,9 +1027,21 @@ setTotalPages(calculatedTotalPages);
     }
   };
 
-  const handleViewDetails = (restaurant: Restaurant) => {
+  const handleViewDetails = async (restaurant: Restaurant) => {
     setSelectedRestaurant(restaurant);
     setShowDetailsModal(true);
+    setDetailsLoading(true);
+    setDetailsError(null);
+    setDetailsMenu(null);
+    try {
+      const response = await apiClient.get(`/restaurant/admin/details/${restaurant.id}`);
+      setDetailsMenu(response.data?.data || null);
+    } catch (err) {
+      console.error('Error fetching restaurant menu details:', err);
+      setDetailsError("Impossible de charger le menu du restaurant.");
+    } finally {
+      setDetailsLoading(false);
+    }
   };
 
   const handleEdit = (restaurant: Restaurant) => {
@@ -1897,6 +1985,159 @@ setTotalPages(calculatedTotalPages);
                     </div>
                   </div>
                 )}
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Menu et options
+                  </label>
+                  {detailsLoading ? (
+                    <p className="mt-2 text-sm text-gray-500">Chargement du menu...</p>
+                  ) : detailsError ? (
+                    <p className="mt-2 text-sm text-red-600">{detailsError}</p>
+                  ) : detailsMenu?.categories && detailsMenu.categories.length > 0 ? (
+                    <div className="mt-2 space-y-2">
+                      {detailsMenu.categories.map((category) => (
+                        <details
+                          key={category.id}
+                          className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                        >
+                          <summary className="cursor-pointer text-sm font-semibold text-gray-700">
+                            {category.nom} ({category.items?.length ?? 0})
+                          </summary>
+                          <div className="mt-3 space-y-3">
+                            {category.items && category.items.length > 0 ? (
+                              category.items.map((item) => {
+                                const ungroupedAdditions = (item.additions || []).filter(
+                                  (addition) => !addition.option_group_id
+                                );
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="rounded-lg border border-gray-200 bg-white p-3 text-sm"
+                                  >
+                                    <div className="flex flex-wrap items-start justify-between gap-2">
+                                      <div>
+                                        <div className="font-semibold text-gray-900">
+                                          {item.nom}
+                                        </div>
+                                        {item.description ? (
+                                          <div className="mt-1 text-xs text-gray-500">
+                                            {item.description}
+                                          </div>
+                                        ) : null}
+                                        <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-600">
+                                          <span>
+                                            Prix: {formatDA(item.display_price ?? item.prix)}
+                                          </span>
+                                          {item.temps_preparation != null ? (
+                                            <span>Preparation: {item.temps_preparation} min</span>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                      <span
+                                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                          item.is_available
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-gray-100 text-gray-600'
+                                        }`}
+                                      >
+                                        {item.is_available ? 'Disponible' : 'Indisponible'}
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-3">
+                                      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        Groupes d&apos;options ({item.option_groups?.length ?? 0})
+                                      </div>
+                                      {item.option_groups && item.option_groups.length > 0 ? (
+                                        <div className="mt-2 space-y-2">
+                                          {item.option_groups.map((group) => {
+                                            const groupOptions = resolveGroupOptions(item, group);
+                                            return (
+                                              <div
+                                                key={group.id}
+                                                className="rounded-lg border border-dashed border-gray-200 bg-white/60 p-2 text-xs"
+                                              >
+                                                <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-900">
+                                                  <span>{group.nom}</span>
+                                                  <span
+                                                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                                      group.is_required
+                                                        ? 'bg-rose-100 text-rose-700'
+                                                        : 'bg-slate-100 text-slate-600'
+                                                    }`}
+                                                  >
+                                                    {group.is_required ? 'Obligatoire' : 'Optionnel'}
+                                                  </span>
+                                                  <span className="text-xs text-gray-500">
+                                                    {groupOptions.length} option(s)
+                                                  </span>
+                                                </div>
+                                                {group.description ? (
+                                                  <div className="mt-1 text-xs text-gray-500">
+                                                    {group.description}
+                                                  </div>
+                                                ) : null}
+                                                {groupOptions.length > 0 ? (
+                                                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                                                    {groupOptions.map((option) => (
+                                                      <span
+                                                        key={option.id}
+                                                        className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5"
+                                                      >
+                                                        {option.nom} ({formatDA(option.prix)})
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <div className="mt-2 text-xs italic text-gray-500">
+                                                    Aucune option dans ce groupe.
+                                                  </div>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div className="mt-2 text-xs italic text-gray-500">
+                                          Aucun groupe pour ce plat.
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {ungroupedAdditions.length > 0 ? (
+                                      <div className="mt-3">
+                                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                          Additions sans groupe ({ungroupedAdditions.length})
+                                        </div>
+                                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                                          {ungroupedAdditions.map((addition) => (
+                                            <span
+                                              key={addition.id}
+                                              className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5"
+                                            >
+                                              {addition.nom} ({formatDA(addition.prix)})
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="text-xs italic text-gray-500">
+                                Aucun plat dans cette categorie.
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-500">Aucun menu disponible.</p>
+                  )}
+                </div>
               </div>
 
               <div className="mt-6 flex gap-3">

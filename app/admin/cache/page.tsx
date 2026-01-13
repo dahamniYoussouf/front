@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import Loader from '@/components/Loader';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface CacheStats {
   hits: number;

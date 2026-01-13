@@ -38,6 +38,7 @@ type MenuItem = {
   temps_preparation?: number | null;
   is_available: boolean;
   additions?: Addition[];
+  option_groups?: OptionGroup[];
   promotions?: Promotion[];
 };
 
@@ -47,6 +48,7 @@ type Addition = {
   description?: string | null;
   prix: number;
   is_available: boolean;
+  option_group_id?: string | null;
 };
 
 type AdditionForm = {
@@ -54,9 +56,29 @@ type AdditionForm = {
   description: string;
   prix: string;
   is_available: boolean;
+  option_group_id: string;
 };
 
 type AdditionModalMode = "create" | "edit";
+
+type OptionGroup = {
+  id: string;
+  nom: string;
+  description?: string | null;
+  is_required: boolean;
+  ordre_affichage?: number | null;
+  additions?: Addition[];
+  options?: Addition[];
+};
+
+type OptionGroupForm = {
+  nom: string;
+  description: string;
+  is_required: boolean;
+  ordre_affichage: string;
+};
+
+type OptionGroupModalMode = "create" | "edit";
 
 type FoodCategory = {
   id: string;
@@ -138,7 +160,27 @@ const parseNumber = (value: string) => {
 
 const formatDA = (value: number) => `${new Intl.NumberFormat('fr-FR').format(value)} DA`;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const resolveGroupOptions = (item: MenuItem, group: OptionGroup) => {
+  const direct = (group.additions && group.additions.length ? group.additions : group.options) || [];
+  const itemAdditions = item.additions || [];
+  if (itemAdditions.length === 0) {
+    return direct;
+  }
+  if (direct.length === 0) {
+    return itemAdditions.filter((addition) => addition.option_group_id === group.id);
+  }
+  const merged = [...direct];
+  const ids = new Set(direct.map((option) => option.id));
+  itemAdditions.forEach((addition) => {
+    if (addition.option_group_id === group.id && !ids.has(addition.id)) {
+      merged.push(addition);
+      ids.add(addition.id);
+    }
+  });
+  return merged;
+};
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const getPromotionLabel = (promotion: {
@@ -293,11 +335,26 @@ export default function RestaurantDetailsPage() {
     nom: '',
     description: '',
     prix: '',
-    is_available: true
+    is_available: true,
+    option_group_id: ''
   });
   const [additionFormErrors, setAdditionFormErrors] = useState<Record<string, string>>({});
   const [additionModalError, setAdditionModalError] = useState('');
   const [additionSaving, setAdditionSaving] = useState(false);
+
+  const [optionGroupModalOpen, setOptionGroupModalOpen] = useState(false);
+  const [optionGroupModalMode, setOptionGroupModalMode] = useState<OptionGroupModalMode>('create');
+  const [optionGroupModalItem, setOptionGroupModalItem] = useState<MenuItem | null>(null);
+  const [optionGroupModalGroup, setOptionGroupModalGroup] = useState<OptionGroup | null>(null);
+  const [optionGroupForm, setOptionGroupForm] = useState<OptionGroupForm>({
+    nom: '',
+    description: '',
+    is_required: false,
+    ordre_affichage: ''
+  });
+  const [optionGroupFormErrors, setOptionGroupFormErrors] = useState<Record<string, string>>({});
+  const [optionGroupModalError, setOptionGroupModalError] = useState('');
+  const [optionGroupSaving, setOptionGroupSaving] = useState(false);
 
   const [promotionOptions, setPromotionOptions] = useState<PromotionOption[]>([]);
   const [promotionLoading, setPromotionLoading] = useState(false);
@@ -424,6 +481,17 @@ export default function RestaurantDetailsPage() {
       if (item.promotions?.some((promo) => matches(promo.title) || matches(promo.badge_text))) {
         return true;
       }
+      if (
+        item.option_groups?.some((group) =>
+          matches(group.nom) ||
+          matches(group.description) ||
+          resolveGroupOptions(item, group).some(
+            (addition) => matches(addition.nom) || matches(addition.description)
+          )
+        )
+      ) {
+        return true;
+      }
       if (item.additions?.some((addition) => matches(addition.nom) || matches(addition.description))) {
         return true;
       }
@@ -454,6 +522,7 @@ export default function RestaurantDetailsPage() {
   }, [visibleCategories]);
 
   const hasFilters = menuQuery.trim().length > 0 || availabilityFilter !== 'all';
+  const additionOptionGroups = additionModalItem?.option_groups || [];
 
   const editablePromotions = useMemo(() => {
     const allowedTypes = new Set(['percentage', 'amount', 'free_delivery', 'other']);
@@ -1006,7 +1075,8 @@ export default function RestaurantDetailsPage() {
       nom: addition?.nom || '',
       description: addition?.description || '',
       prix: addition ? String(addition.prix) : '',
-      is_available: addition?.is_available ?? true
+      is_available: addition?.is_available ?? true,
+      option_group_id: addition?.option_group_id || ''
     });
     setAdditionFormErrors({});
     setAdditionModalError('');
@@ -1025,6 +1095,7 @@ export default function RestaurantDetailsPage() {
     description?: string;
     prix: number;
     is_available: boolean;
+    option_group_id?: string;
   }) => {
     await apiClient.post(`/api/v1/additions/admin/create`, {
       restaurant_id: restaurantId,
@@ -1038,6 +1109,7 @@ export default function RestaurantDetailsPage() {
     description?: string;
     prix: number;
     is_available: boolean;
+    option_group_id?: string;
   }) => {
     await apiClient.put(`/api/v1/additions/admin/update/${additionId}`, {
       restaurant_id: restaurantId,
@@ -1076,7 +1148,8 @@ export default function RestaurantDetailsPage() {
         nom: additionForm.nom.trim(),
         description: additionForm.description.trim() || undefined,
         prix: prixValue,
-        is_available: additionForm.is_available
+        is_available: additionForm.is_available,
+        option_group_id: additionForm.option_group_id || undefined
       };
 
       if (additionModalMode === 'create') {
@@ -1108,6 +1181,123 @@ export default function RestaurantDetailsPage() {
       setAdditionModalError(getApiErrorMessage(err, 'Erreur lors de la suppression'));
     } finally {
       setAdditionSaving(false);
+    }
+  };
+
+  const openOptionGroupModal = (
+    item: MenuItem,
+    mode: OptionGroupModalMode,
+    group?: OptionGroup
+  ) => {
+    setOptionGroupModalMode(mode);
+    setOptionGroupModalItem(item);
+    setOptionGroupModalGroup(group || null);
+    setOptionGroupForm({
+      nom: group?.nom || '',
+      description: group?.description || '',
+      is_required: group?.is_required ?? false,
+      ordre_affichage: group?.ordre_affichage != null ? String(group.ordre_affichage) : ''
+    });
+    setOptionGroupFormErrors({});
+    setOptionGroupModalError('');
+    setOptionGroupModalOpen(true);
+  };
+
+  const closeOptionGroupModal = () => {
+    setOptionGroupModalOpen(false);
+    setOptionGroupModalItem(null);
+    setOptionGroupModalGroup(null);
+    setOptionGroupModalError('');
+  };
+
+  const createOptionGroup = async (menuItemId: string, payload: {
+    nom: string;
+    description?: string;
+    is_required: boolean;
+    ordre_affichage?: number;
+  }) => {
+    await apiClient.post('/api/v1/option-groups/admin/create', {
+      restaurant_id: restaurantId,
+      menu_item_id: menuItemId,
+      ...payload
+    });
+  };
+
+  const updateOptionGroup = async (groupId: string, payload: {
+    nom: string;
+    description?: string;
+    is_required: boolean;
+    ordre_affichage?: number;
+  }) => {
+    await apiClient.put(`/api/v1/option-groups/admin/update/${groupId}`, {
+      restaurant_id: restaurantId,
+      ...payload
+    });
+  };
+
+  const deleteOptionGroup = async (groupId: string) => {
+    await apiClient.delete(`/api/v1/option-groups/admin/delete/${groupId}`, {
+      data: { restaurant_id: restaurantId }
+    });
+  };
+
+  const handleOptionGroupSubmit = async () => {
+    if (!optionGroupModalItem) return;
+    const errors: Record<string, string> = {};
+    if (!optionGroupForm.nom.trim()) {
+      errors.nom = 'Le nom est obligatoire';
+    }
+    const ordreValue = optionGroupForm.ordre_affichage.trim()
+      ? parseInt(optionGroupForm.ordre_affichage, 10)
+      : undefined;
+    if (optionGroupForm.ordre_affichage.trim() && Number.isNaN(ordreValue)) {
+      errors.ordre_affichage = 'Ordre invalide';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setOptionGroupFormErrors(errors);
+      return;
+    }
+
+    setOptionGroupSaving(true);
+    setOptionGroupModalError('');
+    try {
+      const payload = {
+        nom: optionGroupForm.nom.trim(),
+        description: optionGroupForm.description.trim() || undefined,
+        is_required: optionGroupForm.is_required,
+        ordre_affichage: ordreValue
+      };
+
+      if (optionGroupModalMode === 'create') {
+        await createOptionGroup(optionGroupModalItem.id, payload);
+        showNotification('Groupe cree');
+      } else if (optionGroupModalGroup) {
+        await updateOptionGroup(optionGroupModalGroup.id, payload);
+        showNotification('Groupe mis a jour');
+      }
+
+      closeOptionGroupModal();
+      await loadMenu();
+    } catch (err: unknown) {
+      setOptionGroupModalError(getApiErrorMessage(err, 'Erreur lors de la sauvegarde'));
+    } finally {
+      setOptionGroupSaving(false);
+    }
+  };
+
+  const handleDeleteOptionGroup = async (groupId: string) => {
+    if (!window.confirm('Supprimer ce groupe ?')) return;
+    setOptionGroupSaving(true);
+    setOptionGroupModalError('');
+    try {
+      await deleteOptionGroup(groupId);
+      showNotification('Groupe supprime');
+      await loadMenu();
+    } catch (err: unknown) {
+      setOptionGroupModalError(getApiErrorMessage(err, 'Erreur lors de la suppression'));
+    } finally {
+      setOptionGroupSaving(false);
     }
   };
 
@@ -1193,6 +1383,31 @@ export default function RestaurantDetailsPage() {
 
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Groupe d&apos;options
+                </label>
+                <select
+                  value={additionForm.option_group_id}
+                  onChange={(e) =>
+                    setAdditionForm((prev) => ({ ...prev, option_group_id: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                >
+                  <option value="">Sans groupe (optionnel)</option>
+                  {additionOptionGroups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.nom}{group.is_required ? ' (obligatoire)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {additionOptionGroups.length === 0 ? (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Aucun groupe defini. Creez un groupe pour rendre des options obligatoires.
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
                   Prix (DA)
                 </label>
                 <input
@@ -1255,6 +1470,115 @@ export default function RestaurantDetailsPage() {
               >
                 <Save className="h-4 w-4" />
                 {additionModalMode === 'create' ? 'Ajouter' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {optionGroupModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-slate-800">
+              <div className="font-semibold text-gray-900 dark:text-slate-100">
+                {optionGroupModalMode === 'create' ? 'Ajouter un groupe' : 'Modifier le groupe'}
+              </div>
+              <button
+                type="button"
+                onClick={closeOptionGroupModal}
+                className="rounded-lg p-2 hover:bg-gray-50 dark:hover:bg-slate-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              {optionGroupModalError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+                  {optionGroupModalError}
+                </div>
+              ) : null}
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Nom
+                </label>
+                <input
+                  value={optionGroupForm.nom}
+                  onChange={(e) =>
+                    setOptionGroupForm((prev) => ({ ...prev, nom: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  placeholder="Ex: Taille"
+                />
+                {optionGroupFormErrors.nom ? (
+                  <p className="text-xs text-red-500 mt-1">{optionGroupFormErrors.nom}</p>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Description
+                </label>
+                <textarea
+                  value={optionGroupForm.description}
+                  onChange={(e) =>
+                    setOptionGroupForm((prev) => ({ ...prev, description: e.target.value }))
+                  }
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  placeholder="Optionnel"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
+                  Ordre d&apos;affichage
+                </label>
+                <input
+                  value={optionGroupForm.ordre_affichage}
+                  onChange={(e) =>
+                    setOptionGroupForm((prev) => ({ ...prev, ordre_affichage: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+                {optionGroupFormErrors.ordre_affichage ? (
+                  <p className="text-xs text-red-500 mt-1">{optionGroupFormErrors.ordre_affichage}</p>
+                ) : null}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={optionGroupForm.is_required}
+                  onChange={(e) =>
+                    setOptionGroupForm((prev) => ({ ...prev, is_required: e.target.checked }))
+                  }
+                  className="w-4 h-4 text-green-600 rounded focus:ring-2 focus:ring-green-500"
+                />
+                Groupe obligatoire
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 px-4 py-3 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={closeOptionGroupModal}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-800"
+                disabled={optionGroupSaving}
+              >
+                Annuler
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOptionGroupSubmit}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                disabled={optionGroupSaving}
+              >
+                <Save className="h-4 w-4" />
+                {optionGroupModalMode === 'create' ? 'Ajouter' : 'Enregistrer'}
               </button>
             </div>
           </div>
@@ -1886,6 +2210,14 @@ export default function RestaurantDetailsPage() {
                               </button>
                               <button
                                 type="button"
+                                onClick={() => openOptionGroupModal(item, 'create')}
+                                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                                disabled={saving}
+                              >
+                                Ajouter groupe
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => openAdditionModal(item, 'create')}
                                 className="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-900/40 dark:text-indigo-200 dark:hover:bg-indigo-900/20"
                                 disabled={saving}
@@ -1920,6 +2252,86 @@ export default function RestaurantDetailsPage() {
                               </button>
                             </div>
                           </div>
+
+                          <details className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/80 dark:border-slate-700 dark:bg-slate-900/50">
+                            <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
+                              Groupes d&apos;options ({item.option_groups?.length ?? 0})
+                            </summary>
+                            <div className="px-3 pb-3">
+                              {item.option_groups && item.option_groups.length > 0 ? (
+                                <div className="mt-3 space-y-2 text-sm text-gray-700 dark:text-slate-100">
+                                  {item.option_groups.map((group) => {
+                                    const groupOptions = resolveGroupOptions(item, group);
+                                    return (
+                                      <div
+                                        key={group.id}
+                                        className="rounded-lg border border-gray-200 bg-white p-2 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                                      >
+                                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium text-gray-900 dark:text-slate-100">
+                                          <div className="flex items-center gap-2">
+                                            <span className="truncate">{group.nom}</span>
+                                            <span
+                                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                                group.is_required
+                                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200'
+                                                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                                              }`}
+                                            >
+                                              {group.is_required ? 'Obligatoire' : 'Optionnel'}
+                                            </span>
+                                          </div>
+                                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                                            {groupOptions.length} option(s)
+                                          </span>
+                                        </div>
+                                        {group.description ? (
+                                          <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                                            {group.description}
+                                          </div>
+                                        ) : null}
+                                        {groupOptions.length > 0 ? (
+                                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-slate-300">
+                                            {groupOptions.map((option) => (
+                                              <span
+                                                key={option.id}
+                                                className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 dark:border-slate-700 dark:bg-slate-900"
+                                              >
+                                                {option.nom} ({formatDA(option.prix)})
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div className="mt-2 text-xs italic text-gray-500 dark:text-slate-400">
+                                            Aucune option dans ce groupe.
+                                          </div>
+                                        )}
+                                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                          <button
+                                            type="button"
+                                            onClick={() => openOptionGroupModal(item, 'edit', group)}
+                                            className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-300"
+                                          >
+                                            Modifier
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteOptionGroup(group.id)}
+                                            className="font-medium text-red-600 hover:text-red-500 dark:text-red-400"
+                                          >
+                                            Supprimer
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="mt-3 text-xs italic text-gray-500 dark:text-slate-400">
+                                  Aucun groupe pour ce plat.
+                                </div>
+                              )}
+                            </div>
+                          </details>
 
                           <details className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/80 dark:border-slate-700 dark:bg-slate-900/50">
                             <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
@@ -1965,6 +2377,12 @@ export default function RestaurantDetailsPage() {
                                             Supprimer
                                           </button>
                                         </div>
+                                      </div>
+                                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                                        Groupe:{' '}
+                                        {item.option_groups?.find(
+                                          (group) => group.id === addition.option_group_id
+                                        )?.nom || 'Sans groupe'}
                                       </div>
                                       {addition.description ? (
                                         <div className="text-xs text-gray-500 dark:text-slate-400">

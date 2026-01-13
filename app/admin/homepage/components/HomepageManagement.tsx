@@ -14,7 +14,7 @@ import type {
 } from '../module-manager/types';
 import type { AuthFetch } from './types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 const ensureArrayPayload = (value: unknown): ModuleItem[] => {
   if (Array.isArray(value)) {
@@ -260,7 +260,8 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
         options: [
           { value: 'percentage', label: 'Pourcentage' },
           { value: 'amount', label: 'Montant' },
-          { value: 'free_delivery', label: 'Livraison offerte' },
+          { value: 'free_delivery', label: 'Livraison offerte' },
+
           { value: 'other', label: 'Autre' }
         ],
         onValueChange: (value: string | number | boolean, context: ModuleFieldOnChangeContext) => {
@@ -326,7 +327,9 @@ const BASE_MODULE_CONFIGS: ModuleDescriptor[] = [
       { name: 'discount_value', label: 'Valeur du rabais', type: 'number', placeholder: '25', hint: 'Requis pour les types pourcentage et montant' },
       { name: 'currency', label: 'Devise', type: 'text', placeholder: 'DZD', hint: 'Défaut DZD si non défini' },
       { name: 'badge_text', label: 'Badge texte', type: 'text', placeholder: '-20%', hint: 'Visible sur les cartes; généré automatiquement si laissé vide' },
-      { name: 'custom_message', label: 'Message structure', type: 'textarea', hint: 'Utilise pour le type autre' },
+      { name: 'custom_message', label: 'Message structure', type: 'textarea', hint: 'Utilise pour le type autre' },
+
+
       { name: 'start_date', label: 'Début', type: 'date' },
       { name: 'end_date', label: 'Fin', type: 'date' },
       { name: 'is_active', label: 'Actif', type: 'checkbox', default: true }

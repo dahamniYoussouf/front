@@ -175,7 +175,7 @@ export default function AdminDashboard() {
         'Content-Type': 'application/json'
       };
 
-      const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const statsRes = await fetch(`${baseURL}/admin/statistics`, { headers });
 
       if (statsRes.status === 401) {

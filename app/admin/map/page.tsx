@@ -5,7 +5,7 @@ import { Truck, UtensilsCrossed, RefreshCw } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Loader from '@/components/Loader';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface Restaurant {
   id: string;

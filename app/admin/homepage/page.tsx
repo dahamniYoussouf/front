@@ -13,7 +13,7 @@ import ModuleManager, {
   ModuleManagerReferences
 } from './ModuleManager';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 type ValidationErrorItem = { msg: string; param?: string };
 

@@ -17,7 +17,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 type TabKey = 'overview' | 'endpoints' | 'system';
 type EndpointStatus = 'healthy' | 'warning' | 'error' | string;

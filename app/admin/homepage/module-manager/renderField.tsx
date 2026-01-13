@@ -9,7 +9,7 @@ import type {
 } from './types';
 import { resolveOptions } from './helpers';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export type FieldRenderHelpers = {

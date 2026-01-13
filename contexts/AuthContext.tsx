@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const originalFetch = window.fetch.bind(window);
     let refreshPromise: Promise<string | null> | null = null;
 
@@ -157,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🔐 Login attempt for:', email);
       
-      const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       console.log('🌐 API URL:', baseURL);
       
       const response = await fetch(`${baseURL}/auth/login`, {
